@@ -1,0 +1,86 @@
+{
+  "calibration_date": "2026-01-31T16:45:28.609649",
+  "model_provider": "gemini",
+  "model_name": "gemini-3-pro-preview",
+  "baseline_tokens": 5,
+  "model": {
+    "python": 2.61,
+    "javascript": 2.69,
+    "typescript": 2.54,
+    "default": 2.62
+  },
+  "raw_results": [
+    {
+      "language": "python",
+      "size": "small",
+      "characters": 31,
+      "lines": 2,
+      "total_tokens": 28,
+      "code_tokens": 23,
+      "chars_per_token": 1.35
+    },
+    {
+      "language": "python",
+      "size": "medium",
+      "characters": 560,
+      "lines": 16,
+      "total_tokens": 192,
+      "code_tokens": 187,
+      "chars_per_token": 2.99
+    },
+    {
+      "language": "python",
+      "size": "large",
+      "characters": 3952,
+      "lines": 117,
+      "total_tokens": 1136,
+      "code_tokens": 1131,
+      "chars_per_token": 3.49
+    },
+    {
+      "language": "javascript",
+      "size": "small",
+      "characters": 40,
+      "lines": 3,
+      "total_tokens": 32,
+      "code_tokens": 27,
+      "chars_per_token": 1.48
+    },
+    {
+      "language": "javascript",
+      "size": "medium",
+      "characters": 359,
+      "lines": 16,
+      "total_tokens": 125,
+      "code_tokens": 120,
+      "chars_per_token": 2.99
+    },
+    {
+      "language": "javascript",
+      "size": "large",
+      "characters": 3290,
+      "lines": 115,
+      "total_tokens": 922,
+      "code_tokens": 917,
+      "chars_per_token": 3.59
+    },
+    {
+      "language": "typescript",
+      "size": "small",
+      "characters": 64,
+      "lines": 3,
+      "total_tokens": 37,
+      "code_tokens": 32,
+      "chars_per_token": 2.0
+    },
+    {
+      "language": "typescript",
+      "size": "medium",
+      "characters": 515,
+      "lines": 23,
+      "total_tokens": 173,
+      "code_tokens": 168,
+      "chars_per_token": 3.07
+    }
+  ]
+}

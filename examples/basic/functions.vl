@@ -1,0 +1,22 @@
+# Various Function Examples
+M:functions,function,python
+
+# Simple arithmetic
+F:add|I,I|I|ret:i0+i1
+
+F:multiply|I,I|I|ret:i0*i1
+
+# With conditionals
+F:max|I,I|I|ret:if:i0>i1?i0:i1
+
+# With loops
+F:sum_range|I|I|v:total=0|for:idx,range(0,i0)|total+=idx|ret:total
+
+# Array operations
+F:double_all|A|A|ret:data:i0|map:item*2
+
+E:add
+E:multiply
+E:max
+E:sum_range
+E:double_all

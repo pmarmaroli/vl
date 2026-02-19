@@ -1,0 +1,6 @@
+# Data Processing Example
+M:processSales,data_processor,python
+
+F:processSales|A|A|data:i0|filter:amount>100|groupBy:category
+
+E:processSales

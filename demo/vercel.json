@@ -1,0 +1,8 @@
+{
+  "routes": [
+    {
+      "src": "/api/convert",
+      "dest": "/api/convert.py"
+    }
+  ]
+}

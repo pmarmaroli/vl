@@ -1,0 +1,7 @@
+# API Example: Fetch users from API
+M:fetchUsers,api_function,python
+deps:requests
+
+F:fetchUsers|S|O|api:GET,i0
+
+E:fetchUsers

@@ -1,0 +1,84 @@
+{
+  "calibration_date": "2026-01-31T16:34:07.809511",
+  "baseline_tokens": 12,
+  "model": {
+    "python": 2.6,
+    "javascript": 2.61,
+    "typescript": 2.5,
+    "default": 2.58
+  },
+  "raw_results": [
+    {
+      "language": "python",
+      "size": "small",
+      "characters": 31,
+      "lines": 2,
+      "total_tokens": 35,
+      "code_tokens": 23,
+      "chars_per_token": 1.35
+    },
+    {
+      "language": "python",
+      "size": "medium",
+      "characters": 560,
+      "lines": 16,
+      "total_tokens": 199,
+      "code_tokens": 187,
+      "chars_per_token": 2.99
+    },
+    {
+      "language": "python",
+      "size": "large",
+      "characters": 3952,
+      "lines": 117,
+      "total_tokens": 1156,
+      "code_tokens": 1144,
+      "chars_per_token": 3.45
+    },
+    {
+      "language": "javascript",
+      "size": "small",
+      "characters": 40,
+      "lines": 3,
+      "total_tokens": 39,
+      "code_tokens": 27,
+      "chars_per_token": 1.48
+    },
+    {
+      "language": "javascript",
+      "size": "medium",
+      "characters": 359,
+      "lines": 16,
+      "total_tokens": 133,
+      "code_tokens": 121,
+      "chars_per_token": 2.97
+    },
+    {
+      "language": "javascript",
+      "size": "large",
+      "characters": 3290,
+      "lines": 115,
+      "total_tokens": 986,
+      "code_tokens": 974,
+      "chars_per_token": 3.38
+    },
+    {
+      "language": "typescript",
+      "size": "small",
+      "characters": 64,
+      "lines": 3,
+      "total_tokens": 44,
+      "code_tokens": 32,
+      "chars_per_token": 2.0
+    },
+    {
+      "language": "typescript",
+      "size": "medium",
+      "characters": 515,
+      "lines": 23,
+      "total_tokens": 183,
+      "code_tokens": 171,
+      "chars_per_token": 3.01
+    }
+  ]
+}

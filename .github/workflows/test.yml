@@ -1,0 +1,66 @@
+name: VL Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+env:
+  PYTHONIOENCODING: utf-8
+  PYTHONUTF8: 1
+  PYTHONPATH: ${{ github.workspace }}/src
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ['3.9', '3.10', '3.11']
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+    
+    - name: Display Python version
+      run: python --version
+    
+    - name: Run configuration tests
+      run: python tests/unit/test_config.py
+    
+    - name: Run multi-target boolean tests
+      run: python tests/codegen/test_multi_target_boolean.py
+    
+    - name: Run comprehensive codegen tests
+      run: python tests/codegen/test_codegen_all.py
+    
+    - name: Run integration tests
+      run: |
+        python tests/integration/test_edge_cases.py
+        python tests/integration/test_execution.py
+        python tests/integration/test_final_validation.py
+        python tests/integration/test_js_codegen.py
+        python tests/integration/test_py_passthrough.py
+    
+    - name: Run unit tests
+      run: python tests/unit/test_type_checker.py
+    
+    - name: Install Node.js for JavaScript tests
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+    
+    - name: Test CLI compilation (Python target)
+      run: |
+        python -m vl.cli examples/basic/loops.vl --target python --output test_output_py.py
+        python test_output_py.py
+    
+    - name: Test CLI compilation (JavaScript target)
+      run: |
+        python -m vl.cli examples/basic/loops.vl --target javascript --output test_output_js.js
+        node test_output_js.js

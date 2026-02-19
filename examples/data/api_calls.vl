@@ -1,0 +1,12 @@
+# API Call Example
+M:api_demo,function,python
+deps:requests
+
+# Simple GET request
+F:fetchUsers|S|O|response=api:GET,i0|ret:response
+
+# POST request with data
+F:createUser|O|O|response=api:POST,'/api/users',{body:i0}|ret:response
+
+E:fetchUsers
+E:createUser

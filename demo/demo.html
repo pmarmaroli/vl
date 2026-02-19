@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VL Language - Live Demo</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- Navigation -->
+    <nav>
+        <div class="logo">VL <span>Language</span></div>
+        <div class="nav-links">
+            <a href="index.html">Home</a>
+            <a href="https://github.com/pmarmaroli/vibe-language" target="_blank">GitHub</a>
+            <a href="https://github.com/pmarmaroli/vibe-language/releases" target="_blank" class="nav-cta">Download Extension</a>
+        </div>
+    </nav>
+
+    <!-- Hero -->
+    <section class="hero">
+        <h1>
+            Try VL <span class="highlight">Live</span>
+        </h1>
+        <p>
+            Convert your Python code to VL and back. See the token savings in real-time.
+        </p>
+        <div class="privacy-badge">
+            🔒 All conversions run on our server — your code is processed and discarded
+        </div>
+    </section>
+
+    <!-- Stats Bar -->
+    <div class="stats-bar" id="statsBar" style="display: none;">
+        <div class="stat-box">
+            <div class="stat-label">Original Tokens</div>
+            <div class="stat-value" id="originalTokens">-</div>
+        </div>
+        <div class="stat-arrow">→</div>
+        <div class="stat-box success">
+            <div class="stat-label">VL Tokens</div>
+            <div class="stat-value" id="vlTokens">-</div>
+        </div>
+        <div class="stat-arrow">→</div>
+        <div class="stat-box highlight">
+            <div class="stat-label">Saved</div>
+            <div class="stat-value">
+                <span id="savedTokens">-</span>
+                <span class="stat-percent" id="savedPercent">(--%)</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Editor Section -->
+    <section class="editor-section">
+        <div class="editor-container">
+            <div class="editor-grid">
+                <div class="editor-panel">
+                    <div class="panel-header">
+                        <h3>👤 Python Input</h3>
+                        <button class="btn-small" onclick="loadExample()">Load Example</button>
+                    </div>
+                    <textarea id="pythonInput" placeholder="Paste your Python code here..."></textarea>
+                </div>
+
+                <div class="editor-panel">
+                    <div class="panel-header">
+                        <h3>⚡ VL Output</h3>
+                        <button class="btn-small" onclick="copyVL()">Copy</button>
+                    </div>
+                    <textarea id="vlOutput" readonly placeholder="VL code will appear here..."></textarea>
+                </div>
+
+                <div class="editor-panel">
+                    <div class="panel-header">
+                        <h3>🔄 Roundtrip Python</h3>
+                        <button class="btn-small" onclick="copyRoundtrip()">Copy</button>
+                    </div>
+                    <textarea id="pythonOutput" readonly placeholder="Converted back to Python..."></textarea>
+                </div>
+            </div>
+
+            <div class="button-row">
+                <button id="convertBtn" class="btn-primary" onclick="convert()">
+                    Convert Python → VL → Python
+                </button>
+                <button class="btn-secondary" onclick="clearAll()">Clear All</button>
+            </div>
+
+            <div id="errorMessage" class="error-message" style="display: none;"></div>
+            <div id="successMessage" class="success-message" style="display: none;"></div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+        <p>VL (Vibe Language) — Created by Patrick Marmaroli | 2026</p>
+        <p style="margin-top: 10px;">
+            <a href="https://github.com/pmarmaroli/vibe-language" target="_blank">GitHub</a> •
+            <a href="https://github.com/pmarmaroli/vibe-language/releases" target="_blank">Download Extension</a> •
+            Token estimation: 2.58 chars/token
+        </p>
+    </footer>
+
+    <script src="app.js"></script>
+</body>
+</html>
