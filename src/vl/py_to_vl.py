@@ -34,6 +34,7 @@ class PythonToVLConverter:
         self.original_source: str = ""
         self.param_map: dict = {}  # Maps Python param names to VL i0, i1, etc.
         self.renamed_vars: dict = {}  # Maps Python var names that conflict with VL keywords
+        self._temp_counter = 0  # Deterministic temp names for tuple unpacking
         # VL reserved words that can't be used as variable names
         self.vl_reserved = {'op', 'data', 'item', 'meta', 'deps', 'if', 'else', 'for', 'while', 'ret', 'fn', 'class', 'file', 'api', 'async', 'filter', 'map', 'parse', 'ui', 'state', 'props', 'on', 'render', 'sort', 'ffi', 'py', 'i', 'o', 'v', 't'}
     
@@ -151,6 +152,7 @@ class PythonToVLConverter:
         self.imports = []
         self.import_froms = []
         self.has_typing = False
+        self._temp_counter = 0
         
         # First pass: collect imports
         for stmt in node.body:
@@ -537,7 +539,8 @@ class PythonToVLConverter:
                 value = self._convert_expression(node.value)
                 # Generate individual assignments by indexing into the result
                 # Store result in temp variable first
-                temp_var = f"_tmp_{id(node)}"
+                temp_var = f"_t{self._temp_counter}"
+                self._temp_counter += 1
                 self.output.append(f"{self._indent()}{temp_var}={value}")
                 for idx, var_name in enumerate(var_names):
                     self.output.append(f"{self._indent()}{var_name}={temp_var}[{idx}]")

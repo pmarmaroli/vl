@@ -1,0 +1,131 @@
+"""Honest token benchmark: measures with a real LLM tokenizer, not a chars/token estimate.
+
+Compares, for each input Python file (or the built-in samples):
+  1. the original Python source
+  2. the VL conversion (vl.py_to_vl)
+  3. the minified Python (vl.py_minify) — semantics preserved
+
+Tokenizer resolution order:
+  - Mistral Tekken (bundled offline in the `mistral-common` package, 130k-vocab
+    BPE, same family as Claude/GPT tokenizers)
+  - tiktoken o200k_base (requires network on first use)
+  - fallback: chars/2.58 estimate, clearly flagged as UNRELIABLE
+
+Usage:
+    python tests/benchmarks/real_token_benchmark.py [file.py ...]
+"""
+
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
+
+from vl.py_minify import minify  # noqa: E402
+from vl.py_to_vl import convert_python_to_vl  # noqa: E402
+
+
+def get_tokenizer():
+    try:
+        import glob
+
+        import mistral_common
+        from mistral_common.tokens.tokenizers.tekken import Tekkenizer
+
+        data_dir = Path(mistral_common.__file__).parent / "data"
+        candidates = sorted(glob.glob(str(data_dir / "tekken_*.json")))
+        if candidates:
+            tok = Tekkenizer.from_file(candidates[-1])
+            return lambda s: len(tok.encode(s, bos=False, eos=False)), "tekken (mistral-common)"
+    except ImportError:
+        pass
+    try:
+        import tiktoken
+
+        enc = tiktoken.get_encoding("o200k_base")
+        return lambda s: len(enc.encode(s)), "tiktoken o200k_base"
+    except Exception:
+        pass
+    return lambda s: int(len(s) / 2.58), "CHARS/2.58 ESTIMATE — UNRELIABLE, install mistral-common"
+
+
+SAMPLES = {
+    "simple_func.py": "def greet(name: str) -> str:\n    return f'Hello, {name}!'\n",
+    "fib.py": (
+        "def fib(n: int) -> int:\n"
+        "    if n <= 1:\n"
+        "        return n\n"
+        "    return fib(n - 1) + fib(n - 2)\n"
+    ),
+    "data_processing.py": (
+        "def process_users(users: list) -> dict:\n"
+        "    adults = [u for u in users if u['age'] > 18]\n"
+        "    grouped = {}\n"
+        "    for user in adults:\n"
+        "        country = user['country']\n"
+        "        if country not in grouped:\n"
+        "            grouped[country] = []\n"
+        "        grouped[country].append(user)\n"
+        "    return {k: sum(u['revenue'] for u in v) for k, v in grouped.items()}\n"
+    ),
+    "documented_module.py": (
+        '"""Utilities for order handling.\n\nUsed by the billing pipeline.\n"""\n'
+        "\n"
+        "def total(items: list) -> float:\n"
+        '    """Sum item prices.\n\n    Args:\n        items: list of dicts with a price key.\n    """\n'
+        "    # accumulate prices\n"
+        "    result = 0.0\n"
+        "    for item in items:\n"
+        "        result += item['price']  # may be Decimal\n"
+        "    return result\n"
+    ),
+}
+
+
+def main(argv):
+    count, name = get_tokenizer()
+    print(f"Tokenizer: {name}\n")
+
+    if argv:
+        sources = {p: Path(p).read_text(encoding="utf-8") for p in argv}
+    else:
+        sources = SAMPLES
+
+    header = f"{'file':<28} {'python':>7} {'vl':>7} {'vl_sav':>8} {'minified':>9} {'min_sav':>8}"
+    print(header)
+    print("-" * len(header))
+    tot_py = tot_vl = tot_min = 0
+    for fname, src in sources.items():
+        try:
+            vl_code = convert_python_to_vl(src)
+            t_vl = count(vl_code)
+        except Exception:
+            t_vl = None
+        minified = minify(src)
+        t_py, t_min = count(src), count(minified)
+        tot_py += t_py
+        tot_min += t_min
+        if t_vl is not None:
+            tot_vl += t_vl
+            vl_cols = f"{t_vl:>7} {100 * (t_py - t_vl) / t_py:>7.1f}%"
+        else:
+            vl_cols = f"{'FAIL':>7} {'-':>8}"
+        print(
+            f"{Path(fname).name:<28} {t_py:>7} {vl_cols} "
+            f"{t_min:>9} {100 * (t_py - t_min) / t_py:>7.1f}%"
+        )
+    print("-" * len(header))
+    vl_total = (
+        f"{tot_vl:>7} {100 * (tot_py - tot_vl) / tot_py:>7.1f}%" if tot_vl else f"{'-':>7} {'-':>8}"
+    )
+    print(
+        f"{'TOTAL':<28} {tot_py:>7} {vl_total} "
+        f"{tot_min:>9} {100 * (tot_py - tot_min) / tot_py:>7.1f}%"
+    )
+    print(
+        "\nPositive % = tokens saved vs original Python. "
+        "Negative % = costs MORE tokens than plain Python."
+    )
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])
