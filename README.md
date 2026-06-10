@@ -15,7 +15,8 @@
 **VL is a token-efficiency toolkit designed to reduce AI coding costs.** It ships two strategies:
 
 1. **Semantic Python minification** (`vl.py_minify`) — strips comments, docstrings and blank lines while guaranteeing identical semantics (AST-verified). **Measured ~20–30% real token savings** with a real LLM tokenizer, zero correctness risk, no language spec needed.
-2. **The VL language** — a compact syntax that compiles to Python, JavaScript, TypeScript, C, and Rust. Its high-level constructs (data pipelines, API idioms) collapse multi-line patterns into single statements.
+2. **VL v2 macros** (`vl.v2`) — single-line, valid-Python calls that stand for multi-line patterns (JSON I/O, group-by aggregation, HTTP+filter). **Measured 56–80% savings per use**; the compiler expands them back to dependency-free Python. See [docs/vl2-design.md](docs/vl2-design.md).
+3. **The VL v1 language** — a compact syntax that compiles to Python, JavaScript, TypeScript, C, and Rust. Its high-level constructs (data pipelines, API idioms) collapse multi-line patterns into single statements.
 
 > ⚠️ **Honest measurement update (June 2026):** earlier savings figures were based on a chars/token estimate. Re-measured with a real BPE tokenizer, line-by-line VL conversion often costs *more* tokens than plain Python, while minification reliably saves 20–30%. Full analysis and methodology: [docs/token-analysis.md](docs/token-analysis.md).
 
@@ -93,7 +94,20 @@ pip install mistral-common
 python tests/benchmarks/real_token_benchmark.py script.py
 ```
 
-**Convert Python to VL:**
+**VL v2 macros (56–80% savings on covered patterns):**
+
+```bash
+# Print the macro spec to include in your LLM prompt (117 tokens, cacheable)
+python -m vl.v2 --spec
+
+# Expand LLM-generated macro code to dependency-free Python
+python -m vl.v2 generated.py -o runnable.py
+
+# Validate every macro against the real tokenizer
+python tests/benchmarks/v2_macro_benchmark.py
+```
+
+**Convert Python to VL (v1):**
 
 ```bash
 # Convert existing Python file
@@ -126,8 +140,9 @@ Measured with a real LLM tokenizer (Mistral Tekken, same BPE family as Claude/GP
 | Strategy | Real token savings |
 |---|---|
 | **Python minification** (`vl.py_minify`) | **26.1% across all 21 `src/vl` files** (up to 58% on heavily documented code) |
-| VL line-by-line conversion | −36% to +6% (usually *costs* tokens — see [analysis](docs/token-analysis.md)) |
-| VL high-level pipelines (`filter`/`groupBy`/`agg`) | Up to 85% on matching patterns |
+| **VL v2 macros** (`vl.v2`) | **56–80% per macro use** (spec amortizes after ~4 uses — see [design](docs/vl2-design.md)) |
+| VL v1 line-by-line conversion | −36% to +6% (usually *costs* tokens — see [analysis](docs/token-analysis.md)) |
+| VL v1 pipelines (`filter`/`groupBy`/`agg`) | Up to 85% on matching patterns |
 
 **Why:** BPE tokenizers already compress idiomatic Python extremely well (`def `, ` return`, indentation ≈ 1 token each), so compact *characters* don't mean fewer *tokens*. Real savings come from removing what the model doesn't need (comments, docstrings, blank lines) and from collapsing multi-line patterns — not from shorter syntax.
 
@@ -289,6 +304,7 @@ python tests/benchmarks/run_benchmarks.py
 ## Links
 
 - [Token Analysis (real-tokenizer measurements)](docs/token-analysis.md)
+- [VL v2 Design (tokenizer-aware macros)](docs/vl2-design.md)
 - [Language Specification](docs/specification.md)
 - [Releases](https://github.com/pmarmaroli/vibe-language/releases)
 - [Issues](https://github.com/pmarmaroli/vibe-language/issues)

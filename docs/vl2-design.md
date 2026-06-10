@@ -1,0 +1,99 @@
+# VL v2: Tokenizer-Aware Macros
+
+**Status:** Prototype (validated by benchmark)
+**Prerequisite reading:** [token-analysis.md](token-analysis.md) — why compact
+character-level syntax loses tokens on real BPE tokenizers.
+
+## The v2 thesis
+
+> *Python, minus everything the model doesn't need, plus macros for the
+> patterns models see constantly.*
+
+VL v1 replaced Python's surface syntax and lost: BPE tokenizers already
+compress idiomatic Python to ~1 token per keyword/indent, and v1's separators
+fragmented identifiers. VL v2 keeps Python as the carrier syntax and adds
+**macros**: single-line, valid-Python calls that stand for multi-line
+patterns. Savings come from removing *lines*, not characters.
+
+Two layers compose:
+
+1. **Semantic minification** (`vl.py_minify`) — ~20–30% on any file, zero risk.
+2. **Macros** (`vl.v2`) — 56–80% on the specific patterns they cover.
+
+## The adoption rule
+
+A macro stays in the registry **only if its call form costs fewer real tokens
+than its own expansion**. `tests/benchmarks/v2_macro_benchmark.py` enforces
+this (exit code 1 on any FAIL) and reports the spec amortization.
+
+Current registry (Tekken tokenizer, June 2026):
+
+| Macro | Call tokens | Expanded tokens | Saving |
+|---|---|---|---|
+| `jload(path)` | 8 | 32 | 75.0% |
+| `jsave(obj, path)` | 10 | 38 | 73.7% |
+| `read_lines(path)` | 8 | 40 | 80.0% |
+| `group_agg(items, by=, val=, fn=, where=)` | 34 | 77 | 55.8% |
+| `get_json(url, where=)` | 25 | 58 | 56.9% |
+
+**Spec overhead:** the LLM needs the macro spec once per conversation
+(`python -m vl.v2 --spec`, 117 tokens). Mean saving is ~32 tokens per macro
+use, so the spec amortizes after **~4 macro uses** — and prompt caching makes
+it nearly free on subsequent requests.
+
+## How it works
+
+```bash
+# Show the spec to paste into an LLM system prompt
+python -m vl.v2 --spec
+
+# The LLM writes compact code:
+#   config = jload('config.json')
+#   totals = group_agg(users, by='country', val='revenue', fn=sum,
+#                      where=lambda u: u['age'] > 18)
+
+# Expand to dependency-free Python before running it:
+python -m vl.v2 generated.py -o runnable.py
+```
+
+Expansion details:
+
+- Macro calls are recognized as `target = macro(...)` assignments (or bare
+  statements for `jsave`) anywhere in the module, including function bodies.
+- `where=lambda x: ...` predicates are **inlined** (parameter substituted),
+  so the expansion reads like handwritten code and costs no closure.
+- Required imports (`json`, `requests`) are added once, after the module
+  docstring, only if missing.
+- Misuse (e.g. `jload` without an assignment target) raises `MacroError`
+  rather than producing wrong code.
+
+## Design rules for new macros
+
+1. **Valid Python call syntax only.** No new separators — they fragment BPE
+   merges (see token-analysis.md).
+2. **Must collapse ≥3 lines.** One-line patterns never amortize.
+3. **Expansion must be dependency-free, executable Python** verified by a
+   unit test that runs it (`tests/unit/test_v2_macros.py`).
+4. **Benchmark before merging.** Add the call form to `MACRO_USES` in
+   `v2_macro_benchmark.py`; if it doesn't PASS, it doesn't ship.
+5. **Spec line ≤ 1 line.** The spec is paid for in every conversation.
+
+## Candidate macros (not yet implemented)
+
+Each needs benchmark validation first:
+
+- `csv_rows(path)` → `csv.DictReader` boilerplate
+- `run_cmd(cmd)` → `subprocess.run(..., capture_output=True, text=True, check=True)`
+- `retry(fn, times=3, delay=1)` → retry loop with backoff
+- `clamp(x, lo, hi)` — probably FAILs the rule (1 line in Python already); listed
+  as an example of what *not* to add.
+
+## Roadmap to production
+
+1. **Detector (Python → macros):** recognize expanded patterns in existing
+   code and compress them before sending to the LLM (inverse of
+   `expand_macros`). This is what makes v2 useful on code the user already has.
+2. **Extension integration:** add `v2` to `vl.optimizationMode` —
+   minify + macro-compress, include the spec via cached system prompt.
+3. **Spec-free mode:** for models that already know common Python helper
+   idioms, measure whether the spec can be dropped entirely.
