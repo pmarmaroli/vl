@@ -61,14 +61,15 @@ export class VLCompletionProvider implements vscode.InlineCompletionItemProvider
             // Estimate original token count using calibrated model
             const originalTokens = estimateTokens(context, document.languageId);
             
-            // Convert to VL to see potential savings
+            // Optimize (minify | vl | auto per settings) to see potential savings
             try {
-                const vlCode = await this.converter.toVL(
+                const optimized = await this.converter.optimize(
                     context,
                     document.languageId as 'python' | 'javascript' | 'typescript'
                 );
-                
-                const vlTokens = estimateTokens(vlCode, document.languageId);
+                const vlCode = optimized.content;
+
+                const vlTokens = optimized.optimizedTokens;
                 const saved = originalTokens - vlTokens;
                 const savingsPercent = originalTokens > 0 
                     ? ((saved / originalTokens) * 100).toFixed(1)

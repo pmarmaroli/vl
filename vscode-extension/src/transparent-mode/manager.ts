@@ -161,25 +161,24 @@ export class TransparentModeManager {
         }
         
         try {
-            // Convert to VL
-            const vlCode = await this.converter.toVL(
+            // Optimize (minify | vl | auto per settings)
+            const optimized = await this.converter.optimize(
                 code,
                 language as 'python' | 'javascript' | 'typescript'
             );
-            
+
             // Track savings
-            const originalTokens = this.estimateTokens(code);
-            const optimizedTokens = this.estimateTokens(vlCode);
-            this.statusBar.recordSavings(originalTokens, optimizedTokens);
-            
+            this.statusBar.recordSavings(optimized.originalTokens, optimized.optimizedTokens);
+
             this.logger.debug('Simulated optimization', {
                 language,
-                originalTokens,
-                optimizedTokens,
-                savings: ((originalTokens - optimizedTokens) / originalTokens * 100).toFixed(1) + '%'
+                format: optimized.format,
+                originalTokens: optimized.originalTokens,
+                optimizedTokens: optimized.optimizedTokens,
+                savings: ((optimized.originalTokens - optimized.optimizedTokens) / optimized.originalTokens * 100).toFixed(1) + '%'
             });
-            
-            return vlCode;
+
+            return optimized.content;
         } catch (error) {
             this.logger.error('Optimization failed', error);
             return code; // Return original on error
