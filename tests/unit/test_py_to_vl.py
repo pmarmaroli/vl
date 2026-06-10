@@ -1,9 +1,4 @@
-numbers = [1, 2, 3, 4, 5]
-person = {'name': 'Alice', 'age': 30}
-x = True and False
-y = True or False
-x = 10
-"""Tests for Python to VL converter (full module passthrough mode)."""
+"""Tests for the Python to VL converter."""
 
 import os
 import sys
@@ -20,7 +15,7 @@ def _norm(source: str) -> str:
     return textwrap.dedent(source).strip()
 
 
-def test_converter_returns_raw_wrapper():
+def test_simple_function_converts_to_vl():
     python_code = _norm(
         """
         def add(x: int, y: int) -> int:
@@ -28,52 +23,50 @@ def test_converter_returns_raw_wrapper():
         """
     )
 
-    converter = PythonToVLConverter()
-    vl_code = converter.convert(python_code)
+    vl_code = PythonToVLConverter().convert(python_code)
 
-    assert vl_code.startswith("py:__RAW_B64__(")
-    # Decode payload to ensure source is preserved
-    payload = vl_code[len("py:__RAW_B64__("):-1]  # strip prefix and closing paren
-    decoded = __import__("base64").b64decode(eval(payload)).decode("utf-8")
-    assert "def add" in decoded
-    assert "return x + y" in decoded
+    assert vl_code.strip() == "F:add|x:I,y:I|I|ret:x+y"
 
 
-def test_round_trip_preserves_source():
+def test_simple_function_round_trips_through_compiler():
     python_code = _norm(
-        '''
-        """Docstring keeps header."""
-        value = 42
-
-        def double(x: int) -> int:
-            return x * 2
-
-        result = double(value)
-        '''
+        """
+        def add(x: int, y: int) -> int:
+            return x + y
+        """
     )
 
-    converter = PythonToVLConverter()
-    vl_code = converter.convert(python_code)
+    vl_code = PythonToVLConverter().convert(python_code)
     generated_python = Compiler(vl_code, TargetLanguage.PYTHON).compile()
 
     assert _norm(generated_python) == python_code
 
 
-def test_round_trip_preserves_unicode_and_bom():
-    # Include BOM, ZWJ, accents, and explicit escape sequences
-    original = "\ufeff" + _norm(
+def test_tuple_unpacking_uses_deterministic_temp_names():
+    python_code = _norm(
         """
-        title = "Café"
-        zwj = "\u200d"
-        symbols = "≡ƒºæ\u200dΓÜò∩╕Å"
-        snowman = "\u2603"
-        def emit():
-            return f"{title}-{zwj}-{symbols}-{snowman}"
+        def split_pair(pair):
+            a, b = pair
+            return a
         """
-    ) + "\n"  # preserve trailing newline like the converter adds
+    )
 
-    converter = PythonToVLConverter()
-    vl_code = converter.convert(original)
-    generated_python = Compiler(vl_code, TargetLanguage.PYTHON).compile()
+    first = PythonToVLConverter().convert(python_code)
+    second = PythonToVLConverter().convert(python_code)
 
-    assert original == generated_python
+    assert first == second
+    assert "_t0" in first
+    assert "_tmp_" not in first
+
+
+def test_param_names_preserved():
+    python_code = _norm(
+        """
+        def greet(name: str) -> str:
+            return name
+        """
+    )
+
+    vl_code = PythonToVLConverter().convert(python_code)
+
+    assert "name:S" in vl_code

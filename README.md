@@ -12,7 +12,12 @@
 
 ## What is VL?
 
-**VL is a token-efficient programming language designed to reduce AI coding costs.** It achieves **significant token reduction** across diverse codebases by using a compact syntax that compiles to Python, JavaScript, TypeScript, C, and Rust.
+**VL is a token-efficiency toolkit designed to reduce AI coding costs.** It ships two strategies:
+
+1. **Semantic Python minification** (`vl.py_minify`) — strips comments, docstrings and blank lines while guaranteeing identical semantics (AST-verified). **Measured ~20–30% real token savings** with a real LLM tokenizer, zero correctness risk, no language spec needed.
+2. **The VL language** — a compact syntax that compiles to Python, JavaScript, TypeScript, C, and Rust. Its high-level constructs (data pipelines, API idioms) collapse multi-line patterns into single statements.
+
+> ⚠️ **Honest measurement update (June 2026):** earlier savings figures were based on a chars/token estimate. Re-measured with a real BPE tokenizer, line-by-line VL conversion often costs *more* tokens than plain Python, while minification reliably saves 20–30%. Full analysis and methodology: [docs/token-analysis.md](docs/token-analysis.md).
 
 ### Two Ways to Use VL
 
@@ -77,13 +82,22 @@ $env:PYTHONPATH="$PWD\src"    # Windows
 ./vl examples/basic/hello.vl
 ```
 
+**Minify Python for LLM use (recommended — measured 20–30% savings):**
+
+```bash
+# Semantics-preserving minification (AST-verified)
+python -m vl.py_minify script.py -o script.min.py
+
+# Measure real token savings on your own files
+pip install mistral-common
+python tests/benchmarks/real_token_benchmark.py script.py
+```
+
 **Convert Python to VL:**
 
 ```bash
 # Convert existing Python file
 python -m vl.py2vl script.py -o script.vl
-
-# Work with LLM on VL version (~47% fewer tokens)
 
 # Compile back to Python
 ./vl script.vl -o script_output.py
@@ -107,17 +121,15 @@ AI coding assistants consume significant tokens, which impacts costs.
 
 ### The Solution
 
-VL's compact syntax reduces tokens significantly:
+Measured with a real LLM tokenizer (Mistral Tekken, same BPE family as Claude/GPT tokenizers) on this repository's own source code:
 
-**Production validation:** 153 real-world files tested (vocametrix-platform, RANCH, xKozmos-signalprocessing)
-- 100% success rate
-- 127,871 tokens saved
-- Zero files made larger (smart conversion)
+| Strategy | Real token savings |
+|---|---|
+| **Python minification** (`vl.py_minify`) | **26.1% across all 21 `src/vl` files** (up to 58% on heavily documented code) |
+| VL line-by-line conversion | −36% to +6% (usually *costs* tokens — see [analysis](docs/token-analysis.md)) |
+| VL high-level pipelines (`filter`/`groupBy`/`agg`) | Up to 85% on matching patterns |
 
-**Real impact:**
-- Measurable cost reduction for AI-powered development
-- Scales with team size and codebase complexity
-- Proven on production codebases
+**Why:** BPE tokenizers already compress idiomatic Python extremely well (`def `, ` return`, indentation ≈ 1 token each), so compact *characters* don't mean fewer *tokens*. Real savings come from removing what the model doesn't need (comments, docstrings, blank lines) and from collapsing multi-line patterns — not from shorter syntax.
 
 ---
 
@@ -171,9 +183,10 @@ def get_active(url: str) -> list:
 | **Python ↔ VL Converter** | Full-module passthrough for exact roundtrip (raw + base64-safe) |
 | **Parameter Name Preservation** | Original param names roundtrip correctly (`name: str` → `name:S` → `name: str`) |
 | **Docstring Preservation** | Docstrings preserved via full-module passthrough |
+| **Python Minifier** | AST-verified semantic minification, ~20–30% real token savings (`vl.py_minify`) |
+| **Real-Token Benchmark** | Measures with an actual LLM tokenizer (`tests/benchmarks/real_token_benchmark.py`) |
 | **VS Code Integration** | Chat participant with analytics dashboard |
 | **Syntax Validation** | Prevents corrupted file conversions |
-| **Token Estimation** | Calibrated with actual Claude tokenizer (2.58 chars/token) |
 | **Python FFI** | Call any Python library directly (`py:numpy.array([1,2,3])`) |
 | **Try/Except/With Support** | Full exception handling and context managers via `py:` passthrough |
 | **Prompt Caching** | 90% savings on repeated VL spec requests |
@@ -207,7 +220,7 @@ Full conversion support for:
 | **Python ↔ VL Converter** | Full-module passthrough; roundtrip harness green (repo + immo-gen utils) |
 | **VS Code Extension** | `@vl` chat participant (Python only) |
 | **Analytics Dashboard** | Persistent storage with CSV export |
-| **Benchmark Suites** | Examples 12/12, Robustness 15/15, Strength/Weakness 15/15, Token efficiency 13/13 (232 vs 440 tokens → 47.3% savings; 45.1% overall avg) |
+| **Benchmark Suites** | Examples 12/12, Robustness 15/15, Strength/Weakness 15/15. Token efficiency re-measured with a real tokenizer: see [docs/token-analysis.md](docs/token-analysis.md) |
 | **LLM Validation** | Claude & Gemini: 100% correctness |
 
 ### Known Limitations
@@ -226,7 +239,7 @@ Full conversion support for:
 A: No! The VS Code extension handles everything automatically. Just use `@vl` in chat.
 
 **Q: How much will I save?**  
-A: Latest benchmarks show ~47% token reduction. For $200/month AI costs, that's about $94/month saved.
+A: Measured with a real LLM tokenizer, Python minification saves ~20–30% on typical files (more on heavily documented code). For $200/month AI costs, that's roughly $40–60/month. See [docs/token-analysis.md](docs/token-analysis.md) for methodology.
 
 **Q: Is VL a replacement for Python/JavaScript?**  
 A: No! VL is an optimization layer. You still write/execute Python/JS. VL just makes AI interactions cheaper.
@@ -275,6 +288,7 @@ python tests/benchmarks/run_benchmarks.py
 
 ## Links
 
+- [Token Analysis (real-tokenizer measurements)](docs/token-analysis.md)
 - [Language Specification](docs/specification.md)
 - [Releases](https://github.com/pmarmaroli/vibe-language/releases)
 - [Issues](https://github.com/pmarmaroli/vibe-language/issues)
