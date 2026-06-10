@@ -13,10 +13,18 @@
 
 // Calibrated chars-per-token ratios by language
 // Lower = more tokens per character = more expensive
+//
+// The 'vl' ratio is derived from real-tokenizer measurements (Tekken BPE,
+// see docs/token-analysis.md): VL packs ~1.4x more tokens per character
+// than Python (3.17 vs 4.46 chars/token), because its separators fragment
+// identifiers and its digraphs never merge. Scaled to this file's Claude
+// calibration: 2.60 * (3.17 / 4.46) ≈ 1.85. Using the Python ratio for VL
+// content systematically overstates VL savings.
 const CHARS_PER_TOKEN: Record<string, number> = {
     python: 2.60,
     javascript: 2.61,
     typescript: 2.50,
+    vl: 1.85,
     default: 2.58,
 };
 
