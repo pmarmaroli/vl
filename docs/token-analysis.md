@@ -105,6 +105,10 @@ In short: the highest-value evolution of this project is *"Python, minus
 everything the model doesn't need, plus macros for the patterns models see
 constantly"* — not an alternative character-level syntax.
 
+**Update:** this direction is now prototyped as VL v2 — see
+[vl2-design.md](vl2-design.md). All five initial macros pass the adoption
+rule with 56–80% measured savings per use.
+
 ## Reproducing these numbers
 
 ```bash
