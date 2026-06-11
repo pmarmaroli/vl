@@ -141,17 +141,23 @@ Each needs benchmark validation first:
 3. ~~**More detectable forms**~~ — done: pre-filtered list feeding the group
    loop (folded into `where=`), `csv_rows`, `run_cmd`. All pass the adoption
    rule (see registry table above).
-4. ~~**Spec-free mode**~~ — measurement harness shipped:
+4. ~~**Spec-free mode**~~ — measured, verdict: **keep the spec.**
    `tests/experiments/test_spec_free_macros.py` asks a model to rewrite each
    macro snippet as plain Python with and without the spec, executes both
-   against reference expansions, and reports a per-macro verdict. Requires
-   `ANTHROPIC_API_KEY` (offline reference paths are pre-verified). If a model
-   scores 7/7 without the spec, drop the 150-token spec for that model.
+   against reference expansions, and reports a per-macro verdict. Runs with
+   `ANTHROPIC_API_KEY` or through an authenticated `claude` CLI
+   (`--backend cli`).
+
+   Result (Claude Sonnet, June 2026): **5/7 without spec, 7/7 with spec.**
+   The model infers the *gist* of every macro from its name, but two exact
+   contracts are unguessable: `jsave`'s `indent=2` and `read_lines`'
+   `rstrip('\n')`. The 150-token spec is what turns "plausible" into
+   "behaviorally identical", so it stays.
 
 ## Possible next steps
 
-- Run the spec-free experiment across models and make spec inclusion
-  per-model automatic.
 - More macro candidates (`retry`, argparse boilerplate, logging setup) —
   same adoption rule.
 - Make `v2` the extension default once it has soaked in real use.
+- Re-run the spec-free experiment on future models; if one reaches 7/7
+  without the spec, spec inclusion can become per-model.
