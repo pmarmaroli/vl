@@ -75,23 +75,35 @@ class PythonCodeGenerator:
         }
         return type_map.get(vl_type, vl_type)
     
-    def _needs_typing_imports(self, node: Program) -> bool:
-        """Check if program uses types that require typing module"""
-        # Types that need typing module imports (standard + short aliases)
-        typing_types = {'arr', 'obj', 'any', 'A', 'O', 'L'}
-        
+    def _typing_names_needed(self, node: Program) -> set:
+        """Names to import from typing, based on what will actually be emitted.
+
+        Bare 'Any' annotations are skipped when omit_any_types is set, but
+        composite annotations (list[Any], dict[str, Any]) and Callable are
+        always emitted and need their imports.
+        """
+        needed = set()
+
+        def add_for(type_name: str) -> None:
+            py_type = self._convert_type_annotation(type_name)
+            if py_type == 'Any':
+                if not self.omit_any_types:
+                    needed.add('Any')
+            elif 'Any' in py_type:
+                needed.add('Any')
+            elif py_type == 'Callable':
+                needed.add('Callable')
+
         for stmt in node.statements:
             if isinstance(stmt, FunctionDef):
-                # Check input and output types
                 for input_type in stmt.input_types:
-                    if input_type.name in typing_types:
-                        return True
-                if stmt.output_type and stmt.output_type.name in typing_types:
-                    return True
+                    add_for(input_type.name)
+                if stmt.output_type:
+                    add_for(stmt.output_type.name)
             elif isinstance(stmt, VariableDef):
-                if stmt.type_annotation and stmt.type_annotation.name in typing_types:
-                    return True
-        return False
+                if stmt.type_annotation:
+                    add_for(stmt.type_annotation.name)
+        return needed
     
     def _replace_item_keyword(self, expr_str: str, loop_var: str = 'x') -> str:
         """Replace 'item' keyword in expressions with the actual loop variable"""
@@ -131,10 +143,9 @@ class PythonCodeGenerator:
         
         # Check if we need typing imports (only if not already imported via passthrough)
         if not has_typing_passthrough:
-            needs_typing = self._needs_typing_imports(node)
-            # Skip typing import if omit_any_types is set and we only have 'Any'
-            if needs_typing and not self.omit_any_types:
-                self._emit("from typing import Any")
+            typing_names = self._typing_names_needed(node)
+            if typing_names:
+                self._emit(f"from typing import {', '.join(sorted(typing_names))}")
                 self._emit('')
         
         # Dependencies (imports)
