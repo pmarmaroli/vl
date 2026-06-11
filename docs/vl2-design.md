@@ -33,12 +33,14 @@ Current registry (Tekken tokenizer, June 2026):
 | `jload(path)` | 8 | 32 | 75.0% |
 | `jsave(obj, path)` | 10 | 38 | 73.7% |
 | `read_lines(path)` | 8 | 40 | 80.0% |
+| `csv_rows(path)` | 8 | 39 | 79.5% |
+| `run_cmd(cmd)` | 10 | 23 | 56.5% |
 | `group_agg(items, by=, val=, fn=, where=)` | 34 | 77 | 55.8% |
 | `get_json(url, where=)` | 25 | 58 | 56.9% |
 
 **Spec overhead:** the LLM needs the macro spec once per conversation
-(`python -m vl.v2 --spec`, 117 tokens). Mean saving is ~32 tokens per macro
-use, so the spec amortizes after **~4 macro uses** — and prompt caching makes
+(`python -m vl.v2 --spec`, 150 tokens). Mean saving is ~29 tokens per macro
+use, so the spec amortizes after **~5 macro uses** — and prompt caching makes
 it nearly free on subsequent requests.
 
 ## How it works
@@ -62,19 +64,21 @@ python -m vl.v2 -c existing.py
 ### The detector (Python → macros)
 
 `compress_macros` recognizes the expanded idioms in existing code — JSON
-file I/O `with` blocks, `read_lines` variants, `requests.get` +
-`raise_for_status` + `.json()` (+ filter comprehension), and group-by
-accumulation in its `setdefault`, verbose `if key not in` and `return
-{dictcomp}` forms — and rewrites them as macro calls. Combined with
-minification, the measured end-to-end result on a realistic reporting
-module (Tekken tokenizer):
+file I/O `with` blocks, `read_lines` variants, `csv.DictReader` blocks,
+`subprocess.run` boilerplate, `requests.get` + `raise_for_status` +
+`.json()` (+ filter comprehension), and group-by accumulation in its
+`setdefault`, verbose `if key not in` and `return {dictcomp}` forms,
+including a pre-filter comprehension feeding the loop (folded into
+`where=`) — and rewrites them as macro calls. Combined with minification,
+the measured end-to-end result on a realistic reporting module (Tekken
+tokenizer):
 
 | Stage | Tokens | Saving |
 |---|---|---|
-| original | 228 | — |
-| minified only | 197 | 13.6% |
-| macro-compressed only | 113 | 50.4% |
-| **compressed + minified** | **93** | **59.2%** |
+| original | 250 | — |
+| minified only | 219 | 12.4% |
+| macro-compressed only | 127 | 49.2% |
+| **compressed + minified** | **107** | **57.2%** |
 
 Matchers are conservative by design — a rewrite happens only when it is
 semantically safe:
@@ -126,14 +130,28 @@ Each needs benchmark validation first:
 - `clamp(x, lo, hi)` — probably FAILs the rule (1 line in Python already); listed
   as an example of what *not* to add.
 
-## Roadmap to production
+## Roadmap status
 
 1. ~~**Detector (Python → macros)**~~ — done, see above.
-2. **Extension integration:** add `v2` to `vl.optimizationMode` —
-   macro-compress + minify, include the spec via cached system prompt
-   whenever at least one macro was detected.
-3. **More detectable forms:** pre-filtered list feeding the group loop
-   (`adults = [u for u in users if ...]` + loop), `csv.DictReader` blocks,
-   `subprocess.run` boilerplate — each gated by the adoption rule.
-4. **Spec-free mode:** for models that already know common Python helper
-   idioms, measure whether the spec can be dropped entirely.
+2. ~~**Extension integration**~~ — done. `vl.optimizationMode: "v2"` runs the
+   compress+minify pipeline (`python -m vl.v2 -c --minify --json`); the macro
+   spec is added to the system prompt only when macros were actually
+   detected, and its token cost is counted in the never-worse-than-original
+   comparison. Plain-Python contexts no longer carry any spec at all.
+3. ~~**More detectable forms**~~ — done: pre-filtered list feeding the group
+   loop (folded into `where=`), `csv_rows`, `run_cmd`. All pass the adoption
+   rule (see registry table above).
+4. ~~**Spec-free mode**~~ — measurement harness shipped:
+   `tests/experiments/test_spec_free_macros.py` asks a model to rewrite each
+   macro snippet as plain Python with and without the spec, executes both
+   against reference expansions, and reports a per-macro verdict. Requires
+   `ANTHROPIC_API_KEY` (offline reference paths are pre-verified). If a model
+   scores 7/7 without the spec, drop the 150-token spec for that model.
+
+## Possible next steps
+
+- Run the spec-free experiment across models and make spec inclusion
+  per-model automatic.
+- More macro candidates (`retry`, argparse boilerplate, logging setup) —
+  same adoption rule.
+- Make `v2` the extension default once it has soaked in real use.

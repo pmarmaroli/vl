@@ -34,6 +34,8 @@ MACRO_USES = {
         "items = get_json('https://api.example.com/items', "
         "where=lambda r: r['status'] == 'active')\n"
     ),
+    "csv_rows": "rows = csv_rows('data.csv')\n",
+    "run_cmd": "result = run_cmd(['git', 'status'])\n",
 }
 
 
@@ -62,8 +64,9 @@ def fetch_orders(url):
 
 def revenue_by_country(orders):
     """Aggregate paid revenue per country."""
+    big_orders = [o for o in orders if o['amount'] > 100]
     grouped = {}
-    for order in orders:
+    for order in big_orders:
         country = order['country']
         if country not in grouped:
             grouped[country] = []

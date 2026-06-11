@@ -83,31 +83,34 @@ export class ClaudeClient {
     } | null = null;
 
     /**
-     * Generate Python completion from VL context
-     * Uses prompt caching to reduce VL specification overhead
+     * Generate completion from optimized context.
+     *
+     * The system prompt depends on the context format:
+     * - 'vl': full VL v1 specification (cached — it is large)
+     * - 'v2': the small VL v2 macro spec passed by the caller
+     * - 'plain': minimal system prompt, no spec at all (the context is
+     *   plain Python; sending a language spec would waste tokens)
      */
-    async generateCompletion(userPrompt: string, targetLanguage: 'python' | 'javascript' | 'typescript' = 'python'): Promise<string | null> {
+    async generateCompletion(
+        userPrompt: string,
+        targetLanguage: 'python' | 'javascript' | 'typescript' = 'python',
+        context: { format: 'vl' | 'v2' | 'plain'; spec?: string } = { format: 'vl' }
+    ): Promise<string | null> {
         const client = await this.getClient();
         if (!client) {
             this.logger.warn('Claude client not initialized - API key missing');
             return null;
         }
-        
+
         try {
             const response = await client.messages.create({
                 model: "claude-sonnet-4-20250514",
                 max_tokens: 4096,  // Increased for longer responses
-                system: [
-                    {
-                        type: "text",
-                        text: this.getVLSpecification(),
-                        cache_control: { type: "ephemeral" } as any  // TypeScript doesn't recognize cache_control yet
-                    }
-                ],
+                system: this.buildSystemPrompt(context),
                 messages: [
                     {
                         role: "user",
-                        content: this.buildChatPrompt(userPrompt, targetLanguage)
+                        content: this.buildChatPrompt(userPrompt, targetLanguage, context.format)
                     }
                 ]
             } as any);  // Cast to any since prompt caching types aren't in SDK yet
@@ -167,17 +170,49 @@ Generate clean, readable ${langName} code. Only output the code, no explanations
     }
     
     /**
-     * Build prompt for chat requests (user request + VL context)
+     * Build the system prompt for the given context format
      */
-    private buildChatPrompt(userPrompt: string, targetLanguage: string): string {
-        const langName = targetLanguage.charAt(0).toUpperCase() + targetLanguage.slice(1);
-        
-        return `You are a helpful coding assistant. The user has provided code context in VL format (a token-efficient representation).
+    private buildSystemPrompt(context: { format: 'vl' | 'v2' | 'plain'; spec?: string }): any {
+        if (context.format === 'vl') {
+            return [
+                {
+                    type: "text",
+                    text: this.getVLSpecification(),
+                    cache_control: { type: "ephemeral" } as any  // TypeScript doesn't recognize cache_control yet
+                }
+            ];
+        }
+        if (context.format === 'v2' && context.spec) {
+            // Small spec (~150 tokens) — below Anthropic's caching minimum,
+            // included directly
+            return [
+                {
+                    type: "text",
+                    text: `You are a helpful coding assistant.\n\nThe user's code context is plain Python that may contain VL v2 macros — compact one-line calls that a compiler expands to standard Python. Treat them as known helpers:\n\n${context.spec}\nWhen you generate code for the user, write plain standard Python (do not use these macros in your answer unless the user asks for them).`
+                }
+            ];
+        }
+        return [
+            {
+                type: "text",
+                text: "You are a helpful coding assistant. The user's code context is plain Python (comments and docstrings were stripped to save tokens; the logic is unchanged)."
+            }
+        ];
+    }
 
-User Request: ${userPrompt}
+    /**
+     * Build prompt for chat requests (user request + optimized context)
+     */
+    private buildChatPrompt(userPrompt: string, targetLanguage: string, format: 'vl' | 'v2' | 'plain' = 'vl'): string {
+        const langName = targetLanguage.charAt(0).toUpperCase() + targetLanguage.slice(1);
+        const contextNote = format === 'vl'
+            ? '- The code context is in VL format to save tokens'
+            : '- The code context is Python, compacted to save tokens (logic unchanged)';
+
+        return `User Request: ${userPrompt}
 
 Important:
-- The code context is in VL format to save tokens
+${contextNote}
 - Respond to the user's request directly
 - If generating code, use ${langName}
 - Be concise but thorough

@@ -18,6 +18,7 @@ use; avoid --compress if they matter):
 """
 
 import ast
+import copy
 import symtable
 from typing import Dict, List, Optional, Tuple
 
@@ -40,12 +41,13 @@ def _is_attr_call(node: ast.AST, obj_name: str, attr: str) -> bool:
     )
 
 
-def _match_open(call: ast.AST, mode: str) -> Optional[ast.expr]:
-    """Match ``open(path[, mode][, encoding='utf-8'])``; return the path expr.
+def _match_open(call: ast.AST, mode: str, allow_newline: bool = False) -> Optional[ast.expr]:
+    """Match ``open(path[, mode][, encoding='utf-8'][, newline=''])``.
 
-    ``mode`` 'r' also accepts the implicit default. Any other mode, a
-    non-utf-8 encoding, or extra arguments → no match (round-trip would
-    change behavior).
+    Returns the path expression. ``mode`` 'r' also accepts the implicit
+    default; ``newline=''`` is only accepted when ``allow_newline`` (the
+    csv case). Any other mode, a non-utf-8 encoding, or extra arguments
+    → no match (round-trip would change behavior).
     """
     if not (isinstance(call, ast.Call) and _is_name(call.func, "open")):
         return None
@@ -60,6 +62,8 @@ def _match_open(call: ast.AST, mode: str) -> Optional[ast.expr]:
         if kw.arg == "encoding" and _is_const(kw.value, "utf-8"):
             continue
         if kw.arg == "mode" and _is_const(kw.value, mode):
+            continue
+        if allow_newline and kw.arg == "newline" and _is_const(kw.value, ""):
             continue
         return None
     return call.args[0]
@@ -357,7 +361,7 @@ def _match_legacy_append(body: List[ast.stmt], gname: str, itname: str):
     return None
 
 
-def _match_group_agg(stmts: List[ast.stmt]) -> Optional[_Match]:
+def _parse_group_pattern(stmts: List[ast.stmt]) -> Optional[dict]:
     if len(stmts) < 3:
         return None
     # g = {}
@@ -461,17 +465,158 @@ def _match_group_agg(stmts: List[ast.stmt]) -> Optional[_Match]:
         val = ast.unparse(arg.elt.slice)
     else:
         return None
-    val_part = f", val={val}" if val is not None else ""
     internal = [gname, itname, k_id, v_id] + ([kvar] if kvar else [])
+    return {
+        "items": items,
+        "itname": itname,
+        "by": key_src,
+        "val": val,
+        "fn": fn,
+        "where": where,
+        "result_prefix": result_prefix,
+        "internal": internal,
+    }
+
+
+def _group_match_from_parts(parts: dict, consumed: int) -> _Match:
+    val_part = f", val={parts['val']}" if parts["val"] is not None else ""
     return _Match(
         "group_agg",
-        f"{result_prefix}group_agg({items}, by={key_src}{val_part}, fn={fn}{where})",
-        3,
-        internal,
+        f"{parts['result_prefix']}group_agg({parts['items']}, "
+        f"by={parts['by']}{val_part}, fn={parts['fn']}{parts['where']})",
+        consumed,
+        parts["internal"],
     )
 
 
-_MATCHERS = [_match_jload, _match_jsave, _match_read_lines, _match_get_json, _match_group_agg]
+def _match_group_agg(stmts: List[ast.stmt]) -> Optional[_Match]:
+    parts = _parse_group_pattern(stmts)
+    if parts is None:
+        return None
+    return _group_match_from_parts(parts, 3)
+
+
+def _match_prefiltered_group_agg(stmts: List[ast.stmt]) -> Optional[_Match]:
+    """Match a filter comprehension feeding the group pattern:
+
+        adults = [u for u in users if u['age'] > 18]
+        grouped = {}
+        for user in adults: ...
+        result = {k: FN(v) for k, v in grouped.items()}
+
+    Folds the filter into the macro's where= and consumes all 4 statements.
+    """
+    if len(stmts) < 4:
+        return None
+    s0 = stmts[0]
+    if not (
+        isinstance(s0, ast.Assign)
+        and len(s0.targets) == 1
+        and _is_name(s0.targets[0])
+        and isinstance(s0.value, ast.ListComp)
+        and len(s0.value.generators) == 1
+    ):
+        return None
+    gen = s0.value.generators[0]
+    if not (
+        _is_name(gen.target)
+        and len(gen.ifs) == 1
+        and _is_name(s0.value.elt, gen.target.id)
+        and not gen.is_async
+    ):
+        return None
+    filtered_name = s0.targets[0].id
+    parts = _parse_group_pattern(stmts[1:])
+    if parts is None or parts["items"] != filtered_name:
+        return None
+    if parts["where"]:
+        return None  # combining two filters is out of scope
+    # Rename the comprehension variable to the group loop variable
+    cond_var, itname = gen.target.id, parts["itname"]
+
+    class Sub(ast.NodeTransformer):
+        def visit_Name(self, node: ast.Name):
+            if node.id == cond_var:
+                return ast.copy_location(ast.Name(id=itname, ctx=node.ctx), node)
+            return node
+
+    cond = Sub().visit(copy.deepcopy(gen.ifs[0]))
+    parts = dict(parts)
+    parts["items"] = ast.unparse(gen.iter)
+    parts["where"] = f", where=lambda {itname}: {ast.unparse(cond)}"
+    parts["internal"] = parts["internal"] + [filtered_name]
+    return _group_match_from_parts(parts, 4)
+
+
+def _match_csv_rows(stmts: List[ast.stmt]) -> Optional[_Match]:
+    w = _single_with(stmts[0])
+    if w is None:
+        return None
+    ctx, fname, body = w
+    path = _match_open(ctx, "r", allow_newline=True)
+    if path is None or len(body) != 1:
+        return None
+    inner = body[0]
+    if not (isinstance(inner, ast.Assign) and len(inner.targets) == 1 and _is_name(inner.targets[0])):
+        return None
+    value = inner.value
+    # list(csv.DictReader(f))
+    if not (
+        isinstance(value, ast.Call)
+        and _is_name(value.func, "list")
+        and len(value.args) == 1
+        and not value.keywords
+    ):
+        return None
+    reader = value.args[0]
+    if not (
+        isinstance(reader, ast.Call)
+        and isinstance(reader.func, ast.Attribute)
+        and reader.func.attr == "DictReader"
+        and _is_name(reader.func.value, "csv")
+        and len(reader.args) == 1
+        and _is_name(reader.args[0], fname)
+        and not reader.keywords
+    ):
+        return None
+    target = inner.targets[0].id
+    return _Match("csv_rows", f"{target} = csv_rows({ast.unparse(path)})", 1, [fname])
+
+
+def _match_run_cmd(stmts: List[ast.stmt]) -> Optional[_Match]:
+    s0 = stmts[0]
+    if not (isinstance(s0, ast.Assign) and len(s0.targets) == 1 and _is_name(s0.targets[0])):
+        return None
+    call = s0.value
+    if not (
+        isinstance(call, ast.Call)
+        and isinstance(call.func, ast.Attribute)
+        and call.func.attr == "run"
+        and _is_name(call.func.value, "subprocess")
+        and len(call.args) == 1
+    ):
+        return None
+    # Exact kwargs required: anything else changes behavior on round-trip
+    kwargs = {kw.arg: kw.value for kw in call.keywords}
+    if set(kwargs) != {"capture_output", "text", "check"}:
+        return None
+    if not all(_is_const(kwargs[k], True) for k in ("capture_output", "text", "check")):
+        return None
+    target = s0.targets[0].id
+    return _Match("run_cmd", f"{target} = run_cmd({ast.unparse(call.args[0])})", 1, [])
+
+
+# Longer patterns first so they win over their sub-patterns
+_MATCHERS = [
+    _match_jload,
+    _match_jsave,
+    _match_read_lines,
+    _match_csv_rows,
+    _match_run_cmd,
+    _match_get_json,
+    _match_prefiltered_group_agg,
+    _match_group_agg,
+]
 
 
 def _free_or_global_names(source: str) -> set:

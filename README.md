@@ -143,7 +143,7 @@ Measured with a real LLM tokenizer (Mistral Tekken, same BPE family as Claude/GP
 | Strategy | Real token savings |
 |---|---|
 | **Python minification** (`vl.py_minify`) | **26.1% across all 21 `src/vl` files** (up to 58% on heavily documented code) |
-| **VL v2 macros** (`vl.v2`) | **56–80% per macro use** (spec amortizes after ~4 uses — see [design](docs/vl2-design.md)) |
+| **VL v2 macros** (`vl.v2`) | **56–80% per macro use**, 7-macro registry (spec amortizes after ~5 uses — see [design](docs/vl2-design.md)) |
 | VL v1 line-by-line conversion | −36% to +6% (usually *costs* tokens — see [analysis](docs/token-analysis.md)) |
 | VL v1 pipelines (`filter`/`groupBy`/`agg`) | Up to 85% on matching patterns |
 

@@ -112,6 +112,28 @@ def test_non_macro_code_passes_through():
     assert 'jloader()' in expanded
 
 
+def test_csv_rows_expansion_executes(tmp_path):
+    path = tmp_path / 'data.csv'
+    path.write_text('name,age\nAlice,30\nBob,25\n')
+    source = f"rows = csv_rows({str(path)!r})\n"
+
+    expanded = expand_macros(source)
+    ns = _run(expanded)
+
+    assert ns['rows'] == [{'name': 'Alice', 'age': '30'}, {'name': 'Bob', 'age': '25'}]
+    assert 'import csv' in expanded
+
+
+def test_run_cmd_expansion_executes():
+    source = "result = run_cmd([sys.executable, '-c', 'print(42)'])\n"
+
+    expanded = expand_macros(source)
+    ns = _run(expanded, {'sys': sys})
+
+    assert ns['result'].stdout.strip() == '42'
+    assert ns['result'].returncode == 0
+
+
 def test_return_macro_expands(tmp_path):
     path = tmp_path / 'cfg.json'
     path.write_text('{"k": 7}')

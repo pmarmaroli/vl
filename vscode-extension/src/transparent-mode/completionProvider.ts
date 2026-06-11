@@ -97,9 +97,12 @@ export class VLCompletionProvider implements vscode.InlineCompletionItemProvider
                 // If Claude completions are enabled, generate VL-based completion
                 const claudeEnabled = config.get<boolean>('claude.enableCompletions', false);
                 if (claudeEnabled && this.claudeClient && vlCode.trim()) {
+                    const apiFormat = optimized.format === 'vl' ? 'vl'
+                        : optimized.format === 'v2' ? 'v2' : 'plain';
                     const completion = await this.claudeClient.generateCompletion(
                         vlCode,
-                        document.languageId as 'python' | 'javascript' | 'typescript'
+                        document.languageId as 'python' | 'javascript' | 'typescript',
+                        { format: apiFormat, spec: optimized.spec }
                     );
                     
                     if (completion) {

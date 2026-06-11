@@ -3,15 +3,19 @@
 Usage:
     python -m vl.v2 input.py            # expand macros to plain Python
     python -m vl.v2 -c input.py         # compress Python patterns to macros
+    python -m vl.v2 -c --minify --json input.py
+                                        # full pipeline, machine-readable
     python -m vl.v2 input.py -o out.py
     python -m vl.v2 --spec              # print the macro spec for LLM prompts
     echo "data = jload('c.json')" | python -m vl.v2 -
 """
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
+from ..py_minify import minify
 from .detector import compress_macros
 from .macros import MACRO_SPEC, expand_macros
 
@@ -32,6 +36,14 @@ def main(argv=None) -> int:
         help="Reverse direction: detect expanded patterns and rewrite them as macro calls"
     )
     parser.add_argument(
+        "--minify", action="store_true",
+        help="With --compress: also minify the result (comments/docstrings/blank lines)"
+    )
+    parser.add_argument(
+        "--json", action="store_true", dest="as_json",
+        help="Emit JSON: {content, macros, spec} (spec only when macros were detected)"
+    )
+    parser.add_argument(
         "--spec", action="store_true", help="Print the macro spec to include in LLM prompts"
     )
     args = parser.parse_args(argv)
@@ -44,13 +56,17 @@ def main(argv=None) -> int:
 
     source = sys.stdin.read() if args.input == "-" else Path(args.input).read_text(encoding="utf-8")
     try:
+        stats = {}
         if args.compress:
             result, stats = compress_macros(source)
-            if stats:
-                summary = ", ".join(f"{name} x{n}" for name, n in sorted(stats.items()))
-                print(f"Compressed: {summary}", file=sys.stderr)
-            else:
-                print("No known patterns found; output unchanged", file=sys.stderr)
+            if args.minify:
+                result = minify(result)
+            if not args.as_json:
+                if stats:
+                    summary = ", ".join(f"{name} x{n}" for name, n in sorted(stats.items()))
+                    print(f"Compressed: {summary}", file=sys.stderr)
+                else:
+                    print("No known patterns found; output unchanged", file=sys.stderr)
         else:
             result = expand_macros(source)
     except SyntaxError as exc:
@@ -59,6 +75,11 @@ def main(argv=None) -> int:
     except Exception as exc:
         print(f"Error processing macros: {exc}", file=sys.stderr)
         return 1
+
+    if args.as_json:
+        result = json.dumps(
+            {"content": result, "macros": stats, "spec": MACRO_SPEC if stats else ""}
+        )
 
     if args.output:
         Path(args.output).write_text(result, encoding="utf-8")

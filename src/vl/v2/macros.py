@@ -136,12 +136,36 @@ def _expand_read_lines(call: ast.Call, target: str, n: int) -> _Expansion:
     )
 
 
+def _expand_csv_rows(call: ast.Call, target: str, n: int) -> _Expansion:
+    if not target or len(call.args) != 1:
+        raise MacroError("csv_rows(path) must be assigned")
+    path = _unparse(call.args[0])
+    f = f"_f{n}"
+    return _Expansion(
+        f"with open({path}, 'r', encoding='utf-8', newline='') as {f}:\n"
+        f"    {target} = list(csv.DictReader({f}))",
+        imports=["csv"],
+    )
+
+
+def _expand_run_cmd(call: ast.Call, target: str, n: int) -> _Expansion:
+    if not target or len(call.args) != 1:
+        raise MacroError("run_cmd(cmd) must be assigned")
+    cmd = _unparse(call.args[0])
+    return _Expansion(
+        f"{target} = subprocess.run({cmd}, capture_output=True, text=True, check=True)",
+        imports=["subprocess"],
+    )
+
+
 MACROS = {
     "jload": _expand_jload,
     "jsave": _expand_jsave,
     "group_agg": _expand_group_agg,
     "get_json": _expand_get_json,
     "read_lines": _expand_read_lines,
+    "csv_rows": _expand_csv_rows,
+    "run_cmd": _expand_run_cmd,
 }
 
 # Compact spec to include once per conversation when asking an LLM to
@@ -151,6 +175,8 @@ MACRO_SPEC = """VL v2 macros (valid Python calls; the compiler expands them):
 data = jload(path)                      # read JSON file
 jsave(obj, path)                        # write JSON file (indent=2)
 lines = read_lines(path)                # file -> list of lines, no \\n
+rows = csv_rows(path)                   # CSV file -> list of dicts
+r = run_cmd(cmd)                        # subprocess.run, capture+text+check
 out = group_agg(items, by='key', val='field', fn=sum, where=lambda x: ...)
                                         # group dicts by key, aggregate field
 items = get_json(url, where=lambda r: ...)  # HTTP GET -> filtered JSON list
