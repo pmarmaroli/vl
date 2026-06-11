@@ -7,7 +7,7 @@
   "icon": "icon.png",
   "repository": {
     "type": "git",
-    "url": "https://github.com/pmarmaroli/vibe-language.git"
+    "url": "https://github.com/pmarmaroli/vl.git"
   },
   "engines": {
     "vscode": "^1.108.0"

@@ -88,7 +88,7 @@ class RustCodeGenerator:
         else:
             # Unsupported statement type - likely needs implementation
             self._emit(f"// UNSUPPORTED: {type(node).__name__} not yet implemented for Rust")
-            self._emit(f"// Please report this at: github.com/vibe-language/issues")
+            self._emit(f"// Please report this at: github.com/pmarmaroli/vl/issues")
 
     def _generate_function(self, node: FunctionDef):
         """Generate Rust function with type annotations"""

@@ -10,8 +10,8 @@ Thank you for your interest in contributing! This guide will help you get starte
 
 ```bash
 # Clone and setup
-git clone https://github.com/pmarmaroli/vibe-language.git
-cd vibe-language
+git clone https://github.com/pmarmaroli/vl.git
+cd vl
 export PYTHONPATH="$PWD/src"  # Unix/Mac
 $env:PYTHONPATH="$PWD\src"    # Windows
 
@@ -63,7 +63,7 @@ git push origin feature/your-feature
 - Add test cases
 - Fix typos and formatting
 
-**Check [Issues](https://github.com/pmarmaroli/vibe-language/issues) labeled `good first issue`**
+**Check [Issues](https://github.com/pmarmaroli/vl/issues) labeled `good first issue`**
 
 ---
 
@@ -171,14 +171,14 @@ Include:
 - Example code showing the feature
 - Alternatives considered
 
-**Use [GitHub Issues](https://github.com/pmarmaroli/vibe-language/issues) or [Discussions](https://github.com/pmarmaroli/vibe-language/discussions)**
+**Use [GitHub Issues](https://github.com/pmarmaroli/vl/issues) or [Discussions](https://github.com/pmarmaroli/vl/discussions)**
 
 ---
 
 ## Project Structure
 
 ```
-vibe-language/
+vl/
 ├── src/vl/              # Core compiler
 │   ├── lexer.py         # Tokenizer
 │   ├── parser.py        # AST generator
@@ -199,9 +199,9 @@ vibe-language/
 
 ## Community
 
-- **Questions:** [GitHub Discussions](https://github.com/pmarmaroli/vibe-language/discussions)
-- **Bug Reports:** [GitHub Issues](https://github.com/pmarmaroli/vibe-language/issues)
-- **Feature Requests:** [GitHub Discussions](https://github.com/pmarmaroli/vibe-language/discussions)
+- **Questions:** [GitHub Discussions](https://github.com/pmarmaroli/vl/discussions)
+- **Bug Reports:** [GitHub Issues](https://github.com/pmarmaroli/vl/issues)
+- **Feature Requests:** [GitHub Discussions](https://github.com/pmarmaroli/vl/discussions)
 
 ---
 
@@ -241,6 +241,6 @@ Significant contributors may be invited to the core team.
 
 ---
 
-**Questions?** Open an [issue](https://github.com/pmarmaroli/vibe-language/issues) or [discussion](https://github.com/pmarmaroli/vibe-language/discussions). We're here to help!
+**Questions?** Open an [issue](https://github.com/pmarmaroli/vl/issues) or [discussion](https://github.com/pmarmaroli/vl/discussions). We're here to help!
 
 **Thank you for contributing to VL!** 🚀

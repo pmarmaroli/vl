@@ -42,7 +42,7 @@
 
 **Installation:**
 
-1. Download latest [.vsix from Releases](https://github.com/pmarmaroli/vibe-language/releases)
+1. Download latest [.vsix from Releases](https://github.com/pmarmaroli/vl/releases)
 2. VS Code → Extensions (`Ctrl+Shift+X`) → `...` menu → **Install from VSIX...**
 3. Reload VS Code
 4. Add Anthropic API key: Settings → `vl.anthropicApiKey`
@@ -72,8 +72,8 @@
 **Installation:**
 
 ```bash
-git clone https://github.com/pmarmaroli/vibe-language.git
-cd vibe-language
+git clone https://github.com/pmarmaroli/vl.git
+cd vl
 
 # Set Python path
 export PYTHONPATH="$PWD/src"  # Unix/Mac
@@ -269,7 +269,7 @@ A: Use the transparent mode VS Code extension in production. Don't deploy VL sou
 A: The Python→VL converter supports full-module passthrough; use `py:__RAW__` (or base64) to preserve semantics on any module.
 
 **Q: How do I get the extension?**  
-A: Download from [Releases](https://github.com/pmarmaroli/vibe-language/releases) or package from source.
+A: Download from [Releases](https://github.com/pmarmaroli/vl/releases) or package from source.
 
 ---
 
@@ -289,14 +289,14 @@ A: Download from [Releases](https://github.com/pmarmaroli/vibe-language/releases
 ## Contributing
 
 We welcome:
-- Bug reports ([Issues](https://github.com/pmarmaroli/vibe-language/issues))
-- Feature requests ([Discussions](https://github.com/pmarmaroli/vibe-language/discussions))
+- Bug reports ([Issues](https://github.com/pmarmaroli/vl/issues))
+- Feature requests ([Discussions](https://github.com/pmarmaroli/vl/discussions))
 - Code contributions (see [CONTRIBUTING.md](CONTRIBUTING.md))
 
 **Running Tests:**
 
 ```bash
-cd vibe-language
+cd vl
 export PYTHONPATH="$PWD/src"
 python tests/codegen/test_codegen_all.py
 python tests/benchmarks/run_benchmarks.py
@@ -309,9 +309,9 @@ python tests/benchmarks/run_benchmarks.py
 - [Token Analysis (real-tokenizer measurements)](docs/token-analysis.md)
 - [VL v2 Design (tokenizer-aware macros)](docs/vl2-design.md)
 - [Language Specification](docs/specification.md)
-- [Releases](https://github.com/pmarmaroli/vibe-language/releases)
-- [Issues](https://github.com/pmarmaroli/vibe-language/issues)
-- [Discussions](https://github.com/pmarmaroli/vibe-language/discussions)
+- [Releases](https://github.com/pmarmaroli/vl/releases)
+- [Issues](https://github.com/pmarmaroli/vl/issues)
+- [Discussions](https://github.com/pmarmaroli/vl/discussions)
 - [Artifacts (logs/scratch outputs)](artifacts)
 - [Helper scripts](scripts) (one-off maintenance utilities)
 - [Legacy root tests/fixtures](tests/manual/root-legacy)
@@ -326,5 +326,5 @@ See [LICENSE.md](LICENSE.md) for details.
 
 ---
 
-**[⭐ Star this repo](https://github.com/pmarmaroli/vibe-language) to follow development!**
+**[⭐ Star this repo](https://github.com/pmarmaroli/vl) to follow development!**
 

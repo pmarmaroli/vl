@@ -53,7 +53,7 @@ export class VLConverter {
             this.logger.info('Using bundled VL compiler', { path: foundVlRoot });
         }
         
-        // 2. Check workspace folders for vibe-language repo
+        // 2. Check workspace folders for the vl repo
         if (!foundVlRoot) {
             const workspaceFolders = vscode.workspace.workspaceFolders;
             if (workspaceFolders) {
@@ -72,7 +72,7 @@ export class VLConverter {
         
         // 3. Fallback: sibling directory (for development)
         if (!foundVlRoot) {
-            foundVlRoot = path.resolve(context.extensionPath, '..', '..', 'vibe-language');
+            foundVlRoot = path.resolve(context.extensionPath, '..', '..', 'vl');
             this.logger.warn('Using fallback VL path - compiler may not be available', { path: foundVlRoot });
         }
         

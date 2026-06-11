@@ -114,7 +114,7 @@ class CCodeGenerator:
         else:
             # Unsupported statement type - likely needs implementation
             self._emit(f"/* UNSUPPORTED: {type(node).__name__} not yet implemented for C */")
-            self._emit(f"/* Please report this at: github.com/vibe-language/issues */")
+            self._emit(f"/* Please report this at: github.com/pmarmaroli/vl/issues */")
 
     def _generate_function(self, node: FunctionDef):
         """Generate C function definition"""

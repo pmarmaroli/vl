@@ -199,7 +199,7 @@ class PythonCodeGenerator:
         else:
             # Unsupported statement type - likely needs implementation
             self._emit(f"# UNSUPPORTED: {type(node).__name__} not yet implemented")
-            self._emit(f"# Please report this at: github.com/vibe-language/issues")
+            self._emit(f"# Please report this at: github.com/pmarmaroli/vl/issues")
     
     def _generate_class(self, node: 'ClassDef'):
         """Generate Python class definition"""

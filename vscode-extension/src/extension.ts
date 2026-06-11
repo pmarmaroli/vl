@@ -293,7 +293,7 @@ function showWelcomeMessage(context: vscode.ExtensionContext) {
         if (selection === 'Show Dashboard') {
             vscode.commands.executeCommand('vl.showDashboard');
         } else if (selection === 'Learn More') {
-            vscode.env.openExternal(vscode.Uri.parse('https://github.com/pmarmaroli/vibe-language'));
+            vscode.env.openExternal(vscode.Uri.parse('https://github.com/pmarmaroli/vl'));
         } else if (selection === 'Settings') {
             vscode.commands.executeCommand('workbench.action.openSettings', 'vl');
         }
