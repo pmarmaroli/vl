@@ -22,6 +22,12 @@ import sys
 import tokenize
 from pathlib import Path
 
+# Ensure UTF-8 encoding for stdout/stderr on Windows
+if sys.stdout.encoding != "utf-8":
+    sys.stdout.reconfigure(encoding="utf-8")
+if sys.stderr.encoding != "utf-8":
+    sys.stderr.reconfigure(encoding="utf-8")
+
 
 def _blank_comments(source: str) -> str:
     """Remove comments using the tokenize module (string-literal safe)."""
@@ -148,14 +154,17 @@ def main(argv=None) -> int:
         prog="vl.py_minify",
         description="Minify Python source for LLM token efficiency (semantics preserved)",
     )
-    parser.add_argument("input", help="Python file to minify")
+    parser.add_argument("input", help="Python file to minify (use - for stdin)")
     parser.add_argument("-o", "--output", help="Output file (default: stdout)")
     parser.add_argument(
         "--keep-docstrings", action="store_true", help="Keep docstrings in the output"
     )
     args = parser.parse_args(argv)
 
-    source = Path(args.input).read_text(encoding="utf-8")
+    if args.input == "-":
+        source = sys.stdin.read()
+    else:
+        source = Path(args.input).read_text(encoding="utf-8")
     result = minify(source, keep_docstrings=args.keep_docstrings)
     if args.output:
         Path(args.output).write_text(result, encoding="utf-8")

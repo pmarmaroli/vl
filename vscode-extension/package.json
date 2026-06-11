@@ -60,6 +60,23 @@
           "default": true,
           "description": "Enable transparent VL optimization for AI requests"
         },
+        "vl.optimizationMode": {
+          "type": "string",
+          "enum": [
+            "minify",
+            "v2",
+            "vl",
+            "auto"
+          ],
+          "enumDescriptions": [
+            "Semantic Python minification (default): strips comments/docstrings/blank lines, output stays plain Python. Measured ~20-30% real token savings, zero correctness risk.",
+            "VL v2 (highest savings): macro compression + minification. Known multi-line patterns become one-line macro calls (~57% measured on pattern-rich code); the small macro spec is added to the prompt only when macros were detected.",
+            "Legacy VL conversion: compact VL syntax. Often costs MORE tokens than plain Python on real tokenizers (see docs/token-analysis.md).",
+            "Try all strategies and keep whichever is estimated cheapest."
+          ],
+          "default": "minify",
+          "description": "How to optimize code before sending it to the AI"
+        },
         "vl.transparentMode.languages": {
           "type": "array",
           "default": [

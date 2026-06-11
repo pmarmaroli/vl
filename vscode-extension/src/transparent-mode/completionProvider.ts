@@ -61,14 +61,15 @@ export class VLCompletionProvider implements vscode.InlineCompletionItemProvider
             // Estimate original token count using calibrated model
             const originalTokens = estimateTokens(context, document.languageId);
             
-            // Convert to VL to see potential savings
+            // Optimize (minify | vl | auto per settings) to see potential savings
             try {
-                const vlCode = await this.converter.toVL(
+                const optimized = await this.converter.optimize(
                     context,
                     document.languageId as 'python' | 'javascript' | 'typescript'
                 );
-                
-                const vlTokens = estimateTokens(vlCode, document.languageId);
+                const vlCode = optimized.content;
+
+                const vlTokens = optimized.optimizedTokens;
                 const saved = originalTokens - vlTokens;
                 const savingsPercent = originalTokens > 0 
                     ? ((saved / originalTokens) * 100).toFixed(1)
@@ -96,9 +97,12 @@ export class VLCompletionProvider implements vscode.InlineCompletionItemProvider
                 // If Claude completions are enabled, generate VL-based completion
                 const claudeEnabled = config.get<boolean>('claude.enableCompletions', false);
                 if (claudeEnabled && this.claudeClient && vlCode.trim()) {
+                    const apiFormat = optimized.format === 'vl' ? 'vl'
+                        : optimized.format === 'v2' ? 'v2' : 'plain';
                     const completion = await this.claudeClient.generateCompletion(
                         vlCode,
-                        document.languageId as 'python' | 'javascript' | 'typescript'
+                        document.languageId as 'python' | 'javascript' | 'typescript',
+                        { format: apiFormat, spec: optimized.spec }
                     );
                     
                     if (completion) {

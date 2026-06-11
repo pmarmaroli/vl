@@ -9,6 +9,28 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as child_process from 'child_process';
 import { Logger } from '../utils/logger';
+import { estimateTokens } from '../utils/tokenEstimator';
+
+export type OptimizationMode = 'minify' | 'v2' | 'vl' | 'auto';
+
+export interface OptimizationResult {
+    content: string;
+    /**
+     * 'python-min' = minified plain Python, 'v2' = minified Python with VL v2
+     * macros, 'vl' = VL syntax, 'original' = unchanged
+     */
+    format: 'python-min' | 'v2' | 'vl' | 'original';
+    originalTokens: number;
+    optimizedTokens: number;
+    /** VL v2 macro spec to include in the prompt (set only for format 'v2') */
+    spec?: string;
+}
+
+interface V2Result {
+    content: string;
+    macros: Record<string, number>;
+    spec: string;
+}
 
 export class VLConverter {
     private pythonPath: string;
@@ -88,12 +110,154 @@ export class VLConverter {
     }
     
     /**
-     * Validate Python syntax before conversion
+     * Optimize code for LLM token efficiency according to the configured mode.
+     *
+     * - 'minify' (default): semantic Python minification — plain Python out,
+     *   no spec needed in the prompt, measured ~20-30% real savings.
+     * - 'v2': macro compression + minification. Highest savings (~57% on
+     *   pattern-rich code); the small macro spec is included in the prompt
+     *   only when macros were actually detected.
+     * - 'vl': legacy VL conversion.
+     * - 'auto': run all and keep whichever estimates cheapest (VL tokens are
+     *   estimated with the VL-specific ratio; see tokenEstimator).
+     *
+     * Never returns something more expensive than the original (spec
+     * overhead included in the comparison).
+     */
+    async optimize(
+        code: string,
+        language: 'python' | 'javascript' | 'typescript',
+        mode?: OptimizationMode
+    ): Promise<OptimizationResult> {
+        const config = vscode.workspace.getConfiguration('vl');
+        const effectiveMode = mode ?? config.get<OptimizationMode>('optimizationMode', 'minify');
+        const originalTokens = estimateTokens(code, language);
+
+        const candidates: Array<{
+            content: string;
+            format: 'python-min' | 'v2' | 'vl';
+            tokens: number;
+            spec?: string;
+        }> = [];
+
+        if (effectiveMode === 'minify' || effectiveMode === 'auto') {
+            const minified = await this.toMinified(code, language);
+            if (minified !== code) {
+                candidates.push({
+                    content: minified,
+                    format: 'python-min',
+                    tokens: estimateTokens(minified, language)
+                });
+            }
+        }
+        if (effectiveMode === 'v2' || effectiveMode === 'auto') {
+            const v2 = await this.toV2(code, language);
+            if (v2 !== null) {
+                const hasMacros = Object.keys(v2.macros).length > 0;
+                // Count the spec against the candidate so the "never worse
+                // than original" guarantee holds even on the first request.
+                const specTokens = hasMacros ? estimateTokens(v2.spec, language) : 0;
+                candidates.push({
+                    content: v2.content,
+                    format: hasMacros ? 'v2' : 'python-min',
+                    tokens: estimateTokens(v2.content, language) + specTokens,
+                    spec: hasMacros ? v2.spec : undefined
+                });
+            }
+        }
+        if (effectiveMode === 'vl' || effectiveMode === 'auto') {
+            try {
+                const vlCode = await this.toVL(code, language);
+                candidates.push({
+                    content: vlCode,
+                    format: 'vl',
+                    tokens: estimateTokens(vlCode, 'vl')
+                });
+            } catch (error) {
+                this.logger.debug('VL conversion unavailable for this input', {
+                    error: (error as Error)?.message?.substring(0, 100)
+                });
+            }
+        }
+
+        const best = candidates
+            .filter(c => c.tokens < originalTokens)
+            .sort((a, b) => a.tokens - b.tokens)[0];
+
+        if (!best) {
+            return { content: code, format: 'original', originalTokens, optimizedTokens: originalTokens };
+        }
+        return {
+            content: best.content,
+            format: best.format,
+            originalTokens,
+            optimizedTokens: best.tokens,
+            spec: best.spec
+        };
+    }
+
+    /**
+     * VL v2 pipeline: compress known patterns into macros, then minify.
+     * Returns null on any failure (caller falls back to other strategies).
+     */
+    private async toV2(
+        code: string,
+        language: 'python' | 'javascript' | 'typescript'
+    ): Promise<V2Result | null> {
+        if (language !== 'python') {
+            return null;
+        }
+        try {
+            const raw = await this.runPython(['-m', 'vl.v2', '-c', '--minify', '--json', '-'], code);
+            const parsed = JSON.parse(raw) as V2Result;
+            if (typeof parsed.content !== 'string' || !parsed.content.trim()) {
+                return null;
+            }
+            return parsed;
+        } catch (error) {
+            this.logger.debug('v2 pipeline unavailable for this input', {
+                error: (error as Error)?.message?.substring(0, 100)
+            });
+            return null;
+        }
+    }
+
+    /**
+     * Minify Python code for token efficiency (semantics preserved, AST-verified).
+     * Output is plain Python — no VL spec needed in the prompt, no correctness risk.
+     * Falls back to the original code on any failure.
+     */
+    async toMinified(code: string, language: 'python' | 'javascript' | 'typescript'): Promise<string> {
+        if (language !== 'python') {
+            // Minification only implemented for Python so far
+            return code;
+        }
+        this.logger.debug(`Minifying python (${code.length} chars)`);
+        try {
+            const result = await this.runPython(['-m', 'vl.py_minify', '-'], code);
+            // py_minify guarantees valid output or echoes the input; guard anyway
+            return result.trim().length > 0 ? result : code;
+        } catch (error) {
+            this.logger.warn('Python minification failed, using original code', error);
+            return code;
+        }
+    }
+
+    /**
+     * Validate Python syntax before conversion.
+     * Uses ast.parse on stdin — never executes the user's code.
      */
     private async validatePythonSyntax(code: string): Promise<{ valid: boolean; error?: string }> {
         return new Promise((resolve) => {
             const env = { ...process.env, PYTHONPATH: path.join(this.vlRoot, 'src') };
-            const proc = child_process.spawn(this.pythonPath, ['-c', code], { env });
+            const proc = child_process.spawn(
+                this.pythonPath,
+                ['-c', 'import ast, sys; ast.parse(sys.stdin.read())'],
+                { env }
+            );
+            proc.stdin?.on('error', () => { /* process exited early; close handler reports */ });
+            proc.stdin?.write(code);
+            proc.stdin?.end();
             
             let stderr = '';
             proc.stderr.on('data', (data) => {
