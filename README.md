@@ -15,7 +15,7 @@
 **VL is a token-efficiency toolkit designed to reduce AI coding costs.** It ships two strategies:
 
 1. **Semantic Python minification** (`vl.py_minify`) — strips comments, docstrings and blank lines while guaranteeing identical semantics (AST-verified). **Measured ~20–30% real token savings** with a real LLM tokenizer, zero correctness risk, no language spec needed.
-2. **VL v2 macros** (`vl.v2`) — single-line, valid-Python calls that stand for multi-line patterns (JSON I/O, group-by aggregation, HTTP+filter). **Measured 56–80% savings per use**; the compiler expands them back to dependency-free Python. See [docs/vl2-design.md](docs/vl2-design.md).
+2. **VL v2 macros** (`vl.v2`) — single-line, valid-Python calls that stand for multi-line patterns (JSON I/O, group-by aggregation, HTTP+filter). **Measured 56–80% savings per use**; a conservative detector compresses existing Python into macro form, and the compiler expands macros back to dependency-free Python. Combined with minification: **59% measured on a realistic module**. See [docs/vl2-design.md](docs/vl2-design.md).
 3. **The VL v1 language** — a compact syntax that compiles to Python, JavaScript, TypeScript, C, and Rust. Its high-level constructs (data pipelines, API idioms) collapse multi-line patterns into single statements.
 
 > ⚠️ **Honest measurement update (June 2026):** earlier savings figures were based on a chars/token estimate. Re-measured with a real BPE tokenizer, line-by-line VL conversion often costs *more* tokens than plain Python, while minification reliably saves 20–30%. Full analysis and methodology: [docs/token-analysis.md](docs/token-analysis.md).
@@ -99,6 +99,9 @@ python tests/benchmarks/real_token_benchmark.py script.py
 ```bash
 # Print the macro spec to include in your LLM prompt (117 tokens, cacheable)
 python -m vl.v2 --spec
+
+# Compress existing Python patterns into macros before sending to an LLM
+python -m vl.v2 -c script.py
 
 # Expand LLM-generated macro code to dependency-free Python
 python -m vl.v2 generated.py -o runnable.py
