@@ -187,6 +187,96 @@ def test_detects_group_agg_return_form():
     assert ns_a['result'] == ns_b['result'] == {'CH': 11, 'FR': 5}
 
 
+def test_detects_prefiltered_group_agg():
+    # Filter comprehension feeding the group loop folds into where=
+    source = _norm(
+        """
+        adult_users = [u for u in users if u['age'] > 18]
+        grouped = {}
+        for user in adult_users:
+            country = user['country']
+            if country not in grouped:
+                grouped[country] = []
+            grouped[country].append(user)
+        result = {k: sum(u['revenue'] for u in v) for k, v in grouped.items()}
+        """
+    )
+    users = [
+        {'country': 'CH', 'age': 30, 'revenue': 100},
+        {'country': 'CH', 'age': 10, 'revenue': 999},
+        {'country': 'FR', 'age': 40, 'revenue': 50},
+    ]
+
+    compressed, stats = _roundtrip_equiv(source, {'users': users}, 'result')
+
+    assert stats == {'group_agg': 1}
+    assert "group_agg(users" in compressed
+    assert "where=lambda user: user['age'] > 18" in compressed
+
+
+def test_prefiltered_list_used_elsewhere_not_folded():
+    # The intermediate list is read afterwards: folding it away would break
+    source = _norm(
+        """
+        adults = [u for u in users if u['age'] > 18]
+        grouped = {}
+        for user in adults:
+            grouped.setdefault(user['country'], []).append(user)
+        result = {k: len(v) for k, v in grouped.items()}
+        print(len(adults))
+        """
+    )
+
+    compressed, stats = compress_macros(source)
+
+    # The plain group pattern still compresses; the filter stays
+    assert stats == {'group_agg': 1}
+    assert "adults = [u for u in users" in compressed
+
+
+def test_detects_csv_rows(tmp_path):
+    path = str(tmp_path / 'data.csv')
+    (tmp_path / 'data.csv').write_text('a,b\n1,2\n')
+    source = _norm(
+        f"""
+        import csv
+        with open({path!r}, 'r', encoding='utf-8', newline='') as f:
+            rows = list(csv.DictReader(f))
+        """
+    )
+
+    compressed, stats = _roundtrip_equiv(source, {}, 'rows')
+
+    assert stats == {'csv_rows': 1}
+
+
+def test_detects_run_cmd():
+    source = _norm(
+        """
+        import subprocess
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        """
+    )
+
+    compressed, stats = compress_macros(source)
+
+    assert stats == {'run_cmd': 1}
+    assert 'result = run_cmd(cmd)' in compressed
+
+
+def test_run_cmd_with_extra_kwargs_not_compressed():
+    source = _norm(
+        """
+        import subprocess
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True, cwd='/tmp')
+        """
+    )
+
+    compressed, stats = compress_macros(source)
+
+    assert stats == {}
+
+
 def test_detects_get_json_with_filter():
     source = _norm(
         """

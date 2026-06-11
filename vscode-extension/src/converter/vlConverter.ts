@@ -11,14 +11,25 @@ import * as child_process from 'child_process';
 import { Logger } from '../utils/logger';
 import { estimateTokens } from '../utils/tokenEstimator';
 
-export type OptimizationMode = 'minify' | 'vl' | 'auto';
+export type OptimizationMode = 'minify' | 'v2' | 'vl' | 'auto';
 
 export interface OptimizationResult {
     content: string;
-    /** 'python-min' = minified plain Python, 'vl' = VL syntax, 'original' = unchanged */
-    format: 'python-min' | 'vl' | 'original';
+    /**
+     * 'python-min' = minified plain Python, 'v2' = minified Python with VL v2
+     * macros, 'vl' = VL syntax, 'original' = unchanged
+     */
+    format: 'python-min' | 'v2' | 'vl' | 'original';
     originalTokens: number;
     optimizedTokens: number;
+    /** VL v2 macro spec to include in the prompt (set only for format 'v2') */
+    spec?: string;
+}
+
+interface V2Result {
+    content: string;
+    macros: Record<string, number>;
+    spec: string;
 }
 
 export class VLConverter {
@@ -102,12 +113,16 @@ export class VLConverter {
      * Optimize code for LLM token efficiency according to the configured mode.
      *
      * - 'minify' (default): semantic Python minification — plain Python out,
-     *   no VL spec needed in the prompt, measured ~20-30% real savings.
+     *   no spec needed in the prompt, measured ~20-30% real savings.
+     * - 'v2': macro compression + minification. Highest savings (~57% on
+     *   pattern-rich code); the small macro spec is included in the prompt
+     *   only when macros were actually detected.
      * - 'vl': legacy VL conversion.
-     * - 'auto': run both and keep whichever estimates cheapest (VL tokens are
+     * - 'auto': run all and keep whichever estimates cheapest (VL tokens are
      *   estimated with the VL-specific ratio; see tokenEstimator).
      *
-     * Never returns something more expensive than the original.
+     * Never returns something more expensive than the original (spec
+     * overhead included in the comparison).
      */
     async optimize(
         code: string,
@@ -118,7 +133,12 @@ export class VLConverter {
         const effectiveMode = mode ?? config.get<OptimizationMode>('optimizationMode', 'minify');
         const originalTokens = estimateTokens(code, language);
 
-        const candidates: Array<{ content: string; format: 'python-min' | 'vl'; tokens: number }> = [];
+        const candidates: Array<{
+            content: string;
+            format: 'python-min' | 'v2' | 'vl';
+            tokens: number;
+            spec?: string;
+        }> = [];
 
         if (effectiveMode === 'minify' || effectiveMode === 'auto') {
             const minified = await this.toMinified(code, language);
@@ -127,6 +147,21 @@ export class VLConverter {
                     content: minified,
                     format: 'python-min',
                     tokens: estimateTokens(minified, language)
+                });
+            }
+        }
+        if (effectiveMode === 'v2' || effectiveMode === 'auto') {
+            const v2 = await this.toV2(code, language);
+            if (v2 !== null) {
+                const hasMacros = Object.keys(v2.macros).length > 0;
+                // Count the spec against the candidate so the "never worse
+                // than original" guarantee holds even on the first request.
+                const specTokens = hasMacros ? estimateTokens(v2.spec, language) : 0;
+                candidates.push({
+                    content: v2.content,
+                    format: hasMacros ? 'v2' : 'python-min',
+                    tokens: estimateTokens(v2.content, language) + specTokens,
+                    spec: hasMacros ? v2.spec : undefined
                 });
             }
         }
@@ -156,8 +191,35 @@ export class VLConverter {
             content: best.content,
             format: best.format,
             originalTokens,
-            optimizedTokens: best.tokens
+            optimizedTokens: best.tokens,
+            spec: best.spec
         };
+    }
+
+    /**
+     * VL v2 pipeline: compress known patterns into macros, then minify.
+     * Returns null on any failure (caller falls back to other strategies).
+     */
+    private async toV2(
+        code: string,
+        language: 'python' | 'javascript' | 'typescript'
+    ): Promise<V2Result | null> {
+        if (language !== 'python') {
+            return null;
+        }
+        try {
+            const raw = await this.runPython(['-m', 'vl.v2', '-c', '--minify', '--json', '-'], code);
+            const parsed = JSON.parse(raw) as V2Result;
+            if (typeof parsed.content !== 'string' || !parsed.content.trim()) {
+                return null;
+            }
+            return parsed;
+        } catch (error) {
+            this.logger.debug('v2 pipeline unavailable for this input', {
+                error: (error as Error)?.message?.substring(0, 100)
+            });
+            return null;
+        }
     }
 
     /**

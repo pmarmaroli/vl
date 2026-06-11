@@ -17,8 +17,13 @@ interface ChatContext {
     originalTokens: number;
     vlTokens: number;
     language: string;
-    /** 'python-min' = minified plain Python, 'vl' = VL syntax, 'original' = unchanged */
-    format: 'python-min' | 'vl' | 'original';
+    /**
+     * 'python-min' = minified plain Python, 'v2' = minified Python with VL v2
+     * macros, 'vl' = VL syntax, 'original' = unchanged
+     */
+    format: 'python-min' | 'v2' | 'vl' | 'original';
+    /** VL v2 macro spec (set only for format 'v2') */
+    spec?: string;
 }
 
 export class VLChatParticipant {
@@ -115,7 +120,8 @@ export class VLChatParticipant {
                         originalTokens: result.originalTokens,
                         vlTokens: result.optimizedTokens,
                         language: fileCtx.language,
-                        format: result.format
+                        format: result.format,
+                        spec: result.spec
                     });
 
                     totalSaved += saved;
@@ -179,10 +185,12 @@ export class VLChatParticipant {
                 }
                 
                 const minified = vlContexts.filter(c => c.format === 'python-min').length;
+                const asV2 = vlContexts.filter(c => c.format === 'v2').length;
                 const asVL = vlContexts.filter(c => c.format === 'vl').length;
                 const untouched = vlContexts.filter(c => c.format === 'original').length;
                 const parts: string[] = [];
                 if (minified > 0) { parts.push(`${minified} minified`); }
+                if (asV2 > 0) { parts.push(`${asV2} macro-compressed (v2)`); }
                 if (asVL > 0) { parts.push(`${asVL} converted to VL`); }
                 if (untouched > 0) { parts.push(`${untouched} kept as-is`); }
                 stream.markdown(`- ${vlContexts.length} file(s) optimized (${parts.join(', ')})\n`);
@@ -251,6 +259,16 @@ export class VLChatParticipant {
                         }
                         return `Context:\n\`\`\`${c.language}\n${c.vlContent}\n\`\`\``;
                     });
+                    // Pick the API context format: VL needs its full spec,
+                    // v2 needs the small macro spec, plain needs none.
+                    const hasVL = vlContexts.some(c => c.format === 'vl');
+                    const v2Spec = vlContexts.find(c => c.format === 'v2')?.spec;
+                    const apiFormat: 'vl' | 'v2' | 'plain' = hasVL ? 'vl' : (v2Spec ? 'v2' : 'plain');
+                    if (hasVL && v2Spec) {
+                        // Mixed formats (auto mode): VL spec goes in the system
+                        // prompt, so inline the small v2 spec here.
+                        contextBlocks.unshift(`Some context uses VL v2 macros:\n${v2Spec}`);
+                    }
                     const fullPrompt = `${request.prompt}\n\n${contextBlocks.join('\n\n')}`;
                     
                     // Calculate what we would have sent without VL
@@ -262,10 +280,11 @@ export class VLChatParticipant {
                         targetLanguage 
                     });
                     
-                    // Call Claude with VL-optimized context
+                    // Call Claude with the optimized context
                     const response = await this.claudeClient.generateCompletion(
                         fullPrompt,
-                        targetLanguage as 'python' | 'javascript' | 'typescript'
+                        targetLanguage as 'python' | 'javascript' | 'typescript',
+                        { format: apiFormat, spec: v2Spec }
                     );
                     
                     // Get actual usage from Claude
