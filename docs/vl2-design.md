@@ -54,7 +54,45 @@ python -m vl.v2 --spec
 
 # Expand to dependency-free Python before running it:
 python -m vl.v2 generated.py -o runnable.py
+
+# Reverse direction — compress existing Python before sending it to an LLM:
+python -m vl.v2 -c existing.py
 ```
+
+### The detector (Python → macros)
+
+`compress_macros` recognizes the expanded idioms in existing code — JSON
+file I/O `with` blocks, `read_lines` variants, `requests.get` +
+`raise_for_status` + `.json()` (+ filter comprehension), and group-by
+accumulation in its `setdefault`, verbose `if key not in` and `return
+{dictcomp}` forms — and rewrites them as macro calls. Combined with
+minification, the measured end-to-end result on a realistic reporting
+module (Tekken tokenizer):
+
+| Stage | Tokens | Saving |
+|---|---|---|
+| original | 228 | — |
+| minified only | 197 | 13.6% |
+| macro-compressed only | 113 | 50.4% |
+| **compressed + minified** | **93** | **59.2%** |
+
+Matchers are conservative by design — a rewrite happens only when it is
+semantically safe:
+
+- A pattern's internal names (file handle, loop variable, accumulator,
+  response object) leak out of `with`/`for` blocks in Python, so the
+  detector skips the rewrite if they may be *read* afterwards: a
+  `symtable` pass catches free/global uses in nested scopes, and a
+  positional first-occurrence rule distinguishes rebinding from reading
+  in the following statements (conditional rebinds count as reads).
+- `requests.get` without `raise_for_status()` is never compressed —
+  the round-trip would silently add error-raising behavior.
+- `open()` with a non-utf-8 encoding or unusual modes is left alone.
+- Two documented normalizations remain: `json.dump` indent → 2 and
+  request timeout → 30 on round-trip. Avoid `-c` if those matter.
+
+Every detected form has a unit test that executes the original and the
+compress→expand round-trip on sample data and asserts identical results.
 
 Expansion details:
 
@@ -90,10 +128,12 @@ Each needs benchmark validation first:
 
 ## Roadmap to production
 
-1. **Detector (Python → macros):** recognize expanded patterns in existing
-   code and compress them before sending to the LLM (inverse of
-   `expand_macros`). This is what makes v2 useful on code the user already has.
+1. ~~**Detector (Python → macros)**~~ — done, see above.
 2. **Extension integration:** add `v2` to `vl.optimizationMode` —
-   minify + macro-compress, include the spec via cached system prompt.
-3. **Spec-free mode:** for models that already know common Python helper
+   macro-compress + minify, include the spec via cached system prompt
+   whenever at least one macro was detected.
+3. **More detectable forms:** pre-filtered list feeding the group loop
+   (`adults = [u for u in users if ...]` + loop), `csv.DictReader` blocks,
+   `subprocess.run` boilerplate — each gated by the adoption rule.
+4. **Spec-free mode:** for models that already know common Python helper
    idioms, measure whether the spec can be dropped entirely.

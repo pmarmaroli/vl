@@ -112,6 +112,20 @@ def test_non_macro_code_passes_through():
     assert 'jloader()' in expanded
 
 
+def test_return_macro_expands(tmp_path):
+    path = tmp_path / 'cfg.json'
+    path.write_text('{"k": 7}')
+    source = (
+        "def load(path):\n"
+        "    return jload(path)\n"
+    )
+
+    expanded = expand_macros(source)
+    ns = _run(expanded)
+
+    assert ns['load'](str(path)) == {'k': 7}
+
+
 def test_misused_macro_raises():
     with pytest.raises(MacroError):
         expand_macros("jload('x.json')\n")  # missing assignment target

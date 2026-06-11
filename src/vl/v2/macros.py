@@ -165,11 +165,15 @@ class _MacroTransformer(ast.NodeTransformer):
 
     def _try_expand(self, stmt: ast.stmt) -> Optional[List[ast.stmt]]:
         target = ""
+        is_return = False
         if isinstance(stmt, ast.Assign):
             if len(stmt.targets) != 1 or not isinstance(stmt.targets[0], ast.Name):
                 return None
             call = stmt.value
             target = stmt.targets[0].id
+        elif isinstance(stmt, ast.Return) and stmt.value is not None:
+            call = stmt.value
+            is_return = True
         elif isinstance(stmt, ast.Expr):
             call = stmt.value
         else:
@@ -180,6 +184,8 @@ class _MacroTransformer(ast.NodeTransformer):
         if expander is None:
             return None
         self.counter += 1
+        if is_return:
+            target = f"_ret{self.counter}"
         try:
             expansion = expander(call, target, self.counter)
         except MacroError as exc:
@@ -188,7 +194,10 @@ class _MacroTransformer(ast.NodeTransformer):
         for imp in expansion.imports:
             if imp not in self.needed_imports:
                 self.needed_imports.append(imp)
-        return expansion.statements
+        statements = expansion.statements
+        if is_return:
+            statements = statements + ast.parse(f"return {target}").body
+        return statements
 
     def generic_visit(self, node: ast.AST) -> ast.AST:
         node = super().generic_visit(node)
