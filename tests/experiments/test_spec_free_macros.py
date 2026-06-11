@@ -16,12 +16,17 @@ Usage:
     # Set ANTHROPIC_API_KEY in tests/experiments/.env or the environment
     python tests/experiments/test_spec_free_macros.py
     python tests/experiments/test_spec_free_macros.py --model claude-haiku-4-5-20251001
+
+    # Or, with no API key, route through an authenticated Claude Code CLI:
+    python tests/experiments/test_spec_free_macros.py --backend cli --model sonnet
 """
 
 import argparse
 import json
 import os
 import re
+import shutil
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -134,43 +139,97 @@ def run_candidate(code: str, namespace: dict, result_var: str):
     return ns[result_var]
 
 
-def ask(client, model: str, macro_code: str, with_spec: bool) -> str:
+def build_prompt(macro_code: str, with_spec: bool) -> str:
     spec_part = f"\n\nHelper reference:\n{MACRO_SPEC}" if with_spec else ""
-    prompt = (
+    return (
         "The following Python snippet uses small helper functions whose "
         "definitions are not shown. Infer their behavior and rewrite the "
         "snippet as plain standard Python (stdlib + requests only), with "
         "identical behavior. Keep the same variable names. Output only the "
         f"code.{spec_part}\n\n```python\n{macro_code}\n```"
     )
+
+
+def ask_api(client, model: str, macro_code: str, with_spec: bool) -> str:
     response = client.messages.create(
-        model=model, max_tokens=1024, messages=[{"role": "user", "content": prompt}]
+        model=model,
+        max_tokens=1024,
+        messages=[{"role": "user", "content": build_prompt(macro_code, with_spec)}],
     )
     return response.content[0].text
 
 
+def ask_cli(model: str, macro_code: str, with_spec: bool) -> str:
+    """Route the question through an authenticated `claude` CLI (print mode).
+
+    Each call is a fresh conversation, so there is no contamination
+    between the with-spec and without-spec conditions.
+    """
+    result = subprocess.run(
+        ["claude", "-p", build_prompt(macro_code, with_spec), "--model", model],
+        capture_output=True,
+        text=True,
+        timeout=180,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"claude CLI failed: {result.stderr.strip()[:200]}")
+    return result.stdout
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--model", default=DEFAULT_MODEL)
+    parser.add_argument("--model", default=None, help="Model id (API) or alias (CLI)")
+    parser.add_argument(
+        "--backend",
+        choices=["auto", "api", "cli"],
+        default="auto",
+        help="api = Anthropic SDK with ANTHROPIC_API_KEY; cli = authenticated `claude` CLI",
+    )
     args = parser.parse_args()
 
     api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        print("SKIP: set ANTHROPIC_API_KEY in tests/experiments/.env to run this experiment")
-        return 0
-    try:
-        import anthropic
-    except ImportError:
-        print("SKIP: pip install anthropic")
-        return 0
+    backend = args.backend
+    if backend == "auto":
+        if api_key:
+            backend = "api"
+        elif shutil.which("claude"):
+            backend = "cli"
+        else:
+            print(
+                "SKIP: set ANTHROPIC_API_KEY in tests/experiments/.env, or install "
+                "an authenticated `claude` CLI, to run this experiment"
+            )
+            return 0
 
-    client = anthropic.Anthropic(api_key=api_key)
+    if backend == "api":
+        if not api_key:
+            print("SKIP: --backend api requires ANTHROPIC_API_KEY")
+            return 0
+        try:
+            import anthropic
+        except ImportError:
+            print("SKIP: pip install anthropic")
+            return 0
+        client = anthropic.Anthropic(api_key=api_key)
+        model = args.model or DEFAULT_MODEL
+
+        def ask(macro_code, with_spec):
+            return ask_api(client, model, macro_code, with_spec)
+    else:
+        if not shutil.which("claude"):
+            print("SKIP: --backend cli requires the `claude` CLI on PATH")
+            return 0
+        model = args.model or "sonnet"
+
+        def ask(macro_code, with_spec):
+            return ask_cli(model, macro_code, with_spec)
+
     scores = {"with_spec": 0, "without_spec": 0}
     total = 0
 
     with tempfile.TemporaryDirectory() as tmpdir:
         scenarios = make_scenarios(tmpdir)
-        print(f"Model: {args.model}\n")
+        print(f"Backend: {backend}  Model: {model}\n")
         print(f"{'macro':<12} {'no spec':>8} {'with spec':>10}")
         print("-" * 32)
         for name, macro_code, ns_factory, result_var in scenarios:
@@ -179,7 +238,7 @@ def main():
             row = {}
             for label, with_spec in (("without_spec", False), ("with_spec", True)):
                 try:
-                    answer = ask(client, args.model, macro_code, with_spec)
+                    answer = ask(macro_code, with_spec)
                     got = run_candidate(extract_code(answer), ns_factory(), result_var)
                     ok = got == expected
                 except Exception as exc:
@@ -188,7 +247,7 @@ def main():
                 if ok:
                     scores[label] += 1
                 row[label] = "OK" if ok else "FAIL"
-            print(f"{name:<12} {row['without_spec']:>8} {row['with_spec']:>10}")
+            print(f"{name:<12} {row['without_spec']:>8} {row['with_spec']:>10}", flush=True)
             for err in row.get("errors", []):
                 print(f"    ! {err}")
 
