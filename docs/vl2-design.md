@@ -26,21 +26,27 @@ A macro stays in the registry **only if its call form costs fewer real tokens
 than its own expansion**. `tests/benchmarks/v2_macro_benchmark.py` enforces
 this (exit code 1 on any FAIL) and reports the spec amortization.
 
-Current registry (Tekken tokenizer, June 2026):
+Current registry (Tekken tokenizer, July 2026):
 
 | Macro | Call tokens | Expanded tokens | Saving |
 |---|---|---|---|
 | `jload(path)` | 8 | 32 | 75.0% |
 | `jsave(obj, path)` | 10 | 38 | 73.7% |
 | `read_lines(path)` | 8 | 40 | 80.0% |
+| `write_lines(lines, path)` | 12 | 39 | 69.2% |
 | `csv_rows(path)` | 8 | 39 | 79.5% |
+| `csv_save(rows, path)` | 9 | 64 | 85.9% |
 | `run_cmd(cmd)` | 10 | 23 | 56.5% |
 | `group_agg(items, by=, val=, fn=, where=)` | 34 | 77 | 55.8% |
 | `get_json(url, where=)` | 25 | 58 | 56.9% |
+| `post_json(url, payload)` | 17 | 41 | 58.5% |
+| `retry(fn, tries=, delay=)` | 16 | 53 | 69.8% |
+| `env_load(path)` | 7 | 95 | 92.6% |
+| `walk_files(root, pattern)` | 11 | 31 | 64.5% |
 
 **Spec overhead:** the LLM needs the macro spec once per conversation
-(`python -m vl.v2 --spec`, 150 tokens). Mean saving is ~29 tokens per macro
-use, so the spec amortizes after **~5 macro uses** — and prompt caching makes
+(`python -m vl.v2 --spec`, 266 tokens). Mean saving is ~35 tokens per macro
+use, so the spec amortizes after **~8 macro uses** — and prompt caching makes
 it nearly free on subsequent requests.
 
 ## How it works
@@ -124,11 +130,16 @@ Expansion details:
 
 Each needs benchmark validation first:
 
-- `csv_rows(path)` → `csv.DictReader` boilerplate
-- `run_cmd(cmd)` → `subprocess.run(..., capture_output=True, text=True, check=True)`
-- `retry(fn, times=3, delay=1)` → retry loop with backoff
+- `sql_rows(db, query)` → sqlite3 connect/execute/fetchall/close boilerplate
+- `zip_extract(archive, dest)` → zipfile extraction boilerplate
 - `clamp(x, lo, hi)` — probably FAILs the rule (1 line in Python already); listed
   as an example of what *not* to add.
+
+The detector recognizes the expanded idioms for `jload`, `jsave`,
+`read_lines`, `write_lines`, `csv_rows`, `csv_save`, `run_cmd`, `get_json`,
+`post_json` and `group_agg` (including the prefiltered form). `retry`,
+`env_load` and `walk_files` are expansion-only for now: their hand-written
+forms vary too much for a conservative matcher.
 
 ## Roadmap status
 

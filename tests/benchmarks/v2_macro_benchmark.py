@@ -36,6 +36,12 @@ MACRO_USES = {
     ),
     "csv_rows": "rows = csv_rows('data.csv')\n",
     "run_cmd": "result = run_cmd(['git', 'status'])\n",
+    "write_lines": "write_lines(report_lines, 'out/report.txt')\n",
+    "csv_save": "csv_save(rows, 'out/data.csv')\n",
+    "post_json": "resp = post_json('https://api.example.com/search', {'q': query})\n",
+    "retry": "data = retry(lambda: fetch(url), tries=3, delay=1)\n",
+    "env_load": "cfg = env_load('.env')\n",
+    "walk_files": "files = walk_files('src', '*.py')\n",
 }
 
 

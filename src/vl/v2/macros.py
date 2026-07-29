@@ -158,6 +158,105 @@ def _expand_run_cmd(call: ast.Call, target: str, n: int) -> _Expansion:
     )
 
 
+def _expand_write_lines(call: ast.Call, target: str, n: int) -> _Expansion:
+    if target or len(call.args) != 2:
+        raise MacroError("write_lines(lines, path) is a statement: write_lines(lines, path)")
+    lines, path = (_unparse(a) for a in call.args)
+    f = f"_f{n}"
+    return _Expansion(
+        f"with open({path}, 'w', encoding='utf-8') as {f}:\n"
+        f"    {f}.write('\\n'.join({lines}) + '\\n')"
+    )
+
+
+def _expand_csv_save(call: ast.Call, target: str, n: int) -> _Expansion:
+    if target or len(call.args) != 2:
+        raise MacroError("csv_save(rows, path) is a statement: csv_save(rows, path)")
+    rows_expr, path = (_unparse(a) for a in call.args)
+    f, w = f"_f{n}", f"_w{n}"
+    # Bind rows once so a non-trivial expression is not evaluated twice
+    if isinstance(call.args[0], ast.Name):
+        rows, prefix = rows_expr, ""
+    else:
+        rows = f"_rows{n}"
+        prefix = f"{rows} = {rows_expr}\n"
+    return _Expansion(
+        f"{prefix}"
+        f"with open({path}, 'w', encoding='utf-8', newline='') as {f}:\n"
+        f"    {w} = csv.DictWriter({f}, fieldnames=list({rows}[0].keys()))\n"
+        f"    {w}.writeheader()\n"
+        f"    {w}.writerows({rows})",
+        imports=["csv"],
+    )
+
+
+def _expand_post_json(call: ast.Call, target: str, n: int) -> _Expansion:
+    if not target or len(call.args) != 2:
+        raise MacroError("post_json(url, payload) must be assigned")
+    url, payload = (_unparse(a) for a in call.args)
+    r = f"_r{n}"
+    return _Expansion(
+        f"{r} = requests.post({url}, json={payload}, timeout=30)\n"
+        f"{r}.raise_for_status()\n"
+        f"{target} = {r}.json()",
+        imports=["requests"],
+    )
+
+
+def _expand_retry(call: ast.Call, target: str, n: int) -> _Expansion:
+    if not target or len(call.args) != 1:
+        raise MacroError("retry(fn, tries=..., delay=...) must be assigned")
+    kw = _kwargs(call)
+    tries = _unparse(kw["tries"]) if "tries" in kw else "3"
+    delay = _unparse(kw["delay"]) if "delay" in kw else "1"
+    fn = call.args[0]
+    # Zero-arg lambdas are inlined; anything else is called
+    if isinstance(fn, ast.Lambda) and not fn.args.args:
+        attempt = _unparse(fn.body)
+    else:
+        attempt = f"{_unparse(fn)}()"
+    a = f"_a{n}"
+    last = f"{tries} - 1" if not tries.isdigit() else str(int(tries) - 1)
+    return _Expansion(
+        f"for {a} in range({tries}):\n"
+        f"    try:\n"
+        f"        {target} = {attempt}\n"
+        f"        break\n"
+        f"    except Exception:\n"
+        f"        if {a} == {last}:\n"
+        f"            raise\n"
+        f"        time.sleep({delay} * 2 ** {a})",
+        imports=["time"],
+    )
+
+
+def _expand_env_load(call: ast.Call, target: str, n: int) -> _Expansion:
+    if not target or len(call.args) != 1:
+        raise MacroError("env_load(path) must be assigned")
+    path = _unparse(call.args[0])
+    f, ln, k, v = f"_f{n}", f"_l{n}", f"_k{n}", f"_v{n}"
+    return _Expansion(
+        f"{target} = {{}}\n"
+        f"with open({path}, 'r', encoding='utf-8') as {f}:\n"
+        f"    for {ln} in {f}:\n"
+        f"        {ln} = {ln}.strip()\n"
+        f"        if {ln} and not {ln}.startswith('#') and '=' in {ln}:\n"
+        f"            {k}, _, {v} = {ln}.partition('=')\n"
+        f"            {target}[{k}.strip()] = {v}.strip()"
+    )
+
+
+def _expand_walk_files(call: ast.Call, target: str, n: int) -> _Expansion:
+    if not target or len(call.args) != 2:
+        raise MacroError("walk_files(root, pattern) must be assigned")
+    root, pattern = (_unparse(a) for a in call.args)
+    p = f"_p{n}"
+    return _Expansion(
+        f"{target} = sorted(str({p}) for {p} in pathlib.Path({root}).rglob({pattern}))",
+        imports=["pathlib"],
+    )
+
+
 MACROS = {
     "jload": _expand_jload,
     "jsave": _expand_jsave,
@@ -166,6 +265,12 @@ MACROS = {
     "read_lines": _expand_read_lines,
     "csv_rows": _expand_csv_rows,
     "run_cmd": _expand_run_cmd,
+    "write_lines": _expand_write_lines,
+    "csv_save": _expand_csv_save,
+    "post_json": _expand_post_json,
+    "retry": _expand_retry,
+    "env_load": _expand_env_load,
+    "walk_files": _expand_walk_files,
 }
 
 # Compact spec to include once per conversation when asking an LLM to
@@ -175,11 +280,17 @@ MACRO_SPEC = """VL v2 macros (valid Python calls; the compiler expands them):
 data = jload(path)                      # read JSON file
 jsave(obj, path)                        # write JSON file (indent=2)
 lines = read_lines(path)                # file -> list of lines, no \\n
+write_lines(lines, path)                # list of lines -> file, adds \\n
 rows = csv_rows(path)                   # CSV file -> list of dicts
+csv_save(rows, path)                    # list of dicts -> CSV file (w/ header)
 r = run_cmd(cmd)                        # subprocess.run, capture+text+check
 out = group_agg(items, by='key', val='field', fn=sum, where=lambda x: ...)
                                         # group dicts by key, aggregate field
 items = get_json(url, where=lambda r: ...)  # HTTP GET -> filtered JSON list
+resp = post_json(url, payload)          # HTTP POST json -> parsed JSON
+x = retry(lambda: fn(...), tries=3, delay=1)  # retry w/ exponential backoff
+cfg = env_load(path)                    # .env file -> dict (skips #comments)
+files = walk_files(root, pattern)       # recursive glob -> sorted str paths
 """
 
 

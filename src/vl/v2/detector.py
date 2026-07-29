@@ -583,6 +583,152 @@ def _match_csv_rows(stmts: List[ast.stmt]) -> Optional[_Match]:
     return _Match("csv_rows", f"{target} = csv_rows({ast.unparse(path)})", 1, [fname])
 
 
+def _match_write_lines(stmts: List[ast.stmt]) -> Optional[_Match]:
+    """Match ``with open(p, 'w', ...) as f: f.write('\\n'.join(lines) + '\\n')``."""
+    w = _single_with(stmts[0])
+    if w is None:
+        return None
+    ctx, fname, body = w
+    path = _match_open(ctx, "w")
+    if path is None or len(body) != 1:
+        return None
+    inner = body[0]
+    if not (isinstance(inner, ast.Expr) and _is_attr_call(inner.value, fname, "write")):
+        return None
+    call = inner.value
+    if len(call.args) != 1 or call.keywords:
+        return None
+    # '\n'.join(lines) + '\n'
+    arg = call.args[0]
+    if not (
+        isinstance(arg, ast.BinOp)
+        and isinstance(arg.op, ast.Add)
+        and _is_const(arg.right, "\n")
+    ):
+        return None
+    join = arg.left
+    if not (
+        isinstance(join, ast.Call)
+        and isinstance(join.func, ast.Attribute)
+        and join.func.attr == "join"
+        and _is_const(join.func.value, "\n")
+        and len(join.args) == 1
+        and not join.keywords
+    ):
+        return None
+    lines = ast.unparse(join.args[0])
+    return _Match("write_lines", f"write_lines({lines}, {ast.unparse(path)})", 1, [fname])
+
+
+def _match_csv_save(stmts: List[ast.stmt]) -> Optional[_Match]:
+    """Match the DictWriter write-all idiom:
+
+        with open(p, 'w', encoding='utf-8', newline='') as f:
+            w = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
+            w.writeheader()
+            w.writerows(rows)
+    """
+    w = _single_with(stmts[0])
+    if w is None:
+        return None
+    ctx, fname, body = w
+    path = _match_open(ctx, "w", allow_newline=True)
+    if path is None or len(body) != 3:
+        return None
+    s0, s1, s2 = body
+    # w = csv.DictWriter(f, fieldnames=list(ROWS[0].keys()))
+    if not (isinstance(s0, ast.Assign) and len(s0.targets) == 1 and _is_name(s0.targets[0])):
+        return None
+    wname = s0.targets[0].id
+    ctor = s0.value
+    if not (
+        isinstance(ctor, ast.Call)
+        and isinstance(ctor.func, ast.Attribute)
+        and ctor.func.attr == "DictWriter"
+        and _is_name(ctor.func.value, "csv")
+        and len(ctor.args) == 1
+        and _is_name(ctor.args[0], fname)
+        and len(ctor.keywords) == 1
+        and ctor.keywords[0].arg == "fieldnames"
+    ):
+        return None
+    fields = ctor.keywords[0].value
+    if not (
+        isinstance(fields, ast.Call)
+        and _is_name(fields.func, "list")
+        and len(fields.args) == 1
+        and not fields.keywords
+    ):
+        return None
+    keys = fields.args[0]
+    if not (
+        isinstance(keys, ast.Call)
+        and isinstance(keys.func, ast.Attribute)
+        and keys.func.attr == "keys"
+        and not keys.args
+        and isinstance(keys.func.value, ast.Subscript)
+        and _is_const(keys.func.value.slice, 0)
+        and _is_name(keys.func.value.value)
+    ):
+        return None
+    rows = keys.func.value.value.id
+    # w.writeheader()
+    if not (
+        isinstance(s1, ast.Expr)
+        and _is_attr_call(s1.value, wname, "writeheader")
+        and not s1.value.args
+    ):
+        return None
+    # w.writerows(rows)
+    if not (
+        isinstance(s2, ast.Expr)
+        and _is_attr_call(s2.value, wname, "writerows")
+        and len(s2.value.args) == 1
+        and _is_name(s2.value.args[0], rows)
+        and not s2.value.keywords
+    ):
+        return None
+    return _Match("csv_save", f"csv_save({rows}, {ast.unparse(path)})", 1, [fname, wname])
+
+
+def _match_post_json(stmts: List[ast.stmt]) -> Optional[_Match]:
+    """Match ``r = requests.post(url, json=payload[, timeout=ANY])`` +
+    ``r.raise_for_status()`` + ``target = r.json()``."""
+    if len(stmts) < 3:
+        return None
+    s0 = stmts[0]
+    if not (isinstance(s0, ast.Assign) and len(s0.targets) == 1 and _is_name(s0.targets[0])):
+        return None
+    call = s0.value
+    if not (
+        isinstance(call, ast.Call)
+        and isinstance(call.func, ast.Attribute)
+        and call.func.attr == "post"
+        and _is_name(call.func.value, "requests")
+        and len(call.args) == 1
+        and all(kw.arg in ("json", "timeout") for kw in call.keywords)
+        and any(kw.arg == "json" for kw in call.keywords)
+    ):
+        return None
+    rname = s0.targets[0].id
+    url = ast.unparse(call.args[0])
+    payload = ast.unparse(next(kw.value for kw in call.keywords if kw.arg == "json"))
+    s1 = stmts[1]
+    if not (isinstance(s1, ast.Expr) and _is_attr_call(s1.value, rname, "raise_for_status")):
+        return None
+    s2 = stmts[2]
+    if not (
+        isinstance(s2, ast.Assign)
+        and len(s2.targets) == 1
+        and _is_name(s2.targets[0])
+        and _is_attr_call(s2.value, rname, "json")
+        and not s2.value.args
+    ):
+        return None
+    target = s2.targets[0].id
+    return _Match("post_json", f"{target} = post_json({url}, {payload})", 3, [rname])
+
+
 def _match_run_cmd(stmts: List[ast.stmt]) -> Optional[_Match]:
     s0 = stmts[0]
     if not (isinstance(s0, ast.Assign) and len(s0.targets) == 1 and _is_name(s0.targets[0])):
@@ -612,8 +758,11 @@ _MATCHERS = [
     _match_jsave,
     _match_read_lines,
     _match_csv_rows,
+    _match_csv_save,
+    _match_write_lines,
     _match_run_cmd,
     _match_get_json,
+    _match_post_json,
     _match_prefiltered_group_agg,
     _match_group_agg,
 ]

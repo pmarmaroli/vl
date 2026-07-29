@@ -423,3 +423,100 @@ def test_unrelated_code_untouched():
 
     assert stats == {}
     assert compressed == source
+
+
+def test_detects_write_lines(tmp_path):
+    path = tmp_path / 'out.txt'
+    source = _norm(
+        f"""
+        with open({str(path)!r}, 'w', encoding='utf-8') as f:
+            f.write('\\n'.join(items) + '\\n')
+        """
+    )
+
+    compressed, stats = compress_macros(source)
+
+    assert stats == {'write_lines': 1}
+    assert f"write_lines(items, {str(path)!r})" in compressed
+    # Round-trip must produce the same file contents
+    _run(expand_macros(compressed), {'items': ['a', 'b']})
+    assert path.read_text() == 'a\nb\n'
+
+
+def test_detects_csv_save(tmp_path):
+    path = tmp_path / 'out.csv'
+    source = _norm(
+        f"""
+        import csv
+        with open({str(path)!r}, 'w', encoding='utf-8', newline='') as f:
+            writer = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
+            writer.writeheader()
+            writer.writerows(rows)
+        """
+    )
+
+    compressed, stats = compress_macros(source)
+
+    assert stats == {'csv_save': 1}
+    assert f"csv_save(rows, {str(path)!r})" in compressed
+    _run(expand_macros(compressed), {'rows': [{'a': '1', 'b': '2'}]})
+    assert path.read_text() == 'a,b\n1,2\n'
+
+
+def test_csv_save_different_writerows_arg_not_compressed():
+    source = _norm(
+        """
+        import csv
+        with open('out.csv', 'w', encoding='utf-8', newline='') as f:
+            writer = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
+            writer.writeheader()
+            writer.writerows(other_rows)
+        """
+    )
+
+    compressed, stats = compress_macros(source)
+
+    assert stats == {}
+
+
+def test_detects_post_json():
+    source = _norm(
+        """
+        import requests
+        resp = requests.post('https://api.example.com/search', json={'q': 'x'}, timeout=10)
+        resp.raise_for_status()
+        results = post_result = resp.json()
+        """
+    )
+
+    # Multi-target assignment must NOT match (conservative)
+    compressed, stats = compress_macros(source)
+    assert stats == {}
+
+    source = _norm(
+        """
+        import requests
+        resp = requests.post('https://api.example.com/search', json={'q': 'x'}, timeout=10)
+        resp.raise_for_status()
+        results = resp.json()
+        """
+    )
+
+    compressed, stats = compress_macros(source)
+
+    assert stats == {'post_json': 1}
+    assert "results = post_json('https://api.example.com/search', {'q': 'x'})" in compressed
+
+
+def test_post_json_without_raise_for_status_not_compressed():
+    source = _norm(
+        """
+        import requests
+        resp = requests.post(url, json=payload)
+        results = resp.json()
+        """
+    )
+
+    compressed, stats = compress_macros(source)
+
+    assert stats == {}

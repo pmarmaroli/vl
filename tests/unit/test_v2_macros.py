@@ -148,6 +148,140 @@ def test_return_macro_expands(tmp_path):
     assert ns['load'](str(path)) == {'k': 7}
 
 
+def test_write_lines_expansion_executes(tmp_path):
+    path = tmp_path / 'out.txt'
+    source = f"write_lines(['alpha', 'beta'], {str(path)!r})\n"
+
+    _run(expand_macros(source))
+
+    assert path.read_text() == 'alpha\nbeta\n'
+
+
+def test_write_lines_read_lines_roundtrip(tmp_path):
+    path = tmp_path / 'data.txt'
+    source = (
+        f"write_lines(items, {str(path)!r})\n"
+        f"back = read_lines({str(path)!r})\n"
+    )
+
+    ns = _run(expand_macros(source), {'items': ['x', 'y', 'z']})
+
+    assert ns['back'] == ['x', 'y', 'z']
+
+
+def test_csv_save_expansion_executes(tmp_path):
+    path = tmp_path / 'out.csv'
+    source = f"csv_save(rows, {str(path)!r})\n"
+    rows = [{'name': 'Alice', 'age': '30'}, {'name': 'Bob', 'age': '25'}]
+
+    expanded = expand_macros(source)
+    _run(expanded, {'rows': rows})
+
+    assert 'import csv' in expanded
+    assert path.read_text() == 'name,age\nAlice,30\nBob,25\n'
+
+
+def test_csv_save_csv_rows_roundtrip(tmp_path):
+    path = tmp_path / 'data.csv'
+    source = (
+        f"csv_save(rows, {str(path)!r})\n"
+        f"back = csv_rows({str(path)!r})\n"
+    )
+    rows = [{'k': '1'}, {'k': '2'}]
+
+    ns = _run(expand_macros(source), {'rows': rows})
+
+    assert ns['back'] == rows
+
+
+def test_csv_save_complex_expression_bound_once(tmp_path):
+    path = tmp_path / 'out.csv'
+    source = f"csv_save(make_rows(), {str(path)!r})\n"
+    calls = []
+
+    def make_rows():
+        calls.append(1)
+        return [{'a': '1'}]
+
+    _run(expand_macros(source), {'make_rows': make_rows})
+
+    assert len(calls) == 1
+
+
+def test_post_json_expansion_is_valid_python():
+    source = "resp = post_json(url, {'q': 1})\n"
+
+    expanded = expand_macros(source)
+
+    ast.parse(expanded)
+    assert 'import requests' in expanded
+    assert 'requests.post' in expanded
+    assert 'raise_for_status' in expanded
+    assert 'timeout=30' in expanded
+
+
+def test_retry_succeeds_after_failures():
+    source = "value = retry(attempt, tries=3, delay=0)\n"
+    state = {'n': 0}
+
+    def attempt():
+        state['n'] += 1
+        if state['n'] < 3:
+            raise ValueError('flaky')
+        return 42
+
+    expanded = expand_macros(source)
+    ns = _run(expanded, {'attempt': attempt})
+
+    assert ns['value'] == 42
+    assert state['n'] == 3
+    assert 'import time' in expanded
+
+
+def test_retry_exhausted_reraises():
+    source = "value = retry(attempt, tries=2, delay=0)\n"
+
+    def attempt():
+        raise ValueError('always')
+
+    with pytest.raises(ValueError):
+        _run(expand_macros(source), {'attempt': attempt})
+
+
+def test_retry_inlines_zero_arg_lambda():
+    source = "value = retry(lambda: compute(7), tries=2, delay=0)\n"
+
+    expanded = expand_macros(source)
+
+    assert 'lambda' not in expanded
+    ns = _run(expanded, {'compute': lambda x: x * 2})
+    assert ns['value'] == 14
+
+
+def test_env_load_expansion_executes(tmp_path):
+    path = tmp_path / '.env'
+    path.write_text('# comment\nHOST=localhost\nPORT = 8080\n\nBAD LINE\n')
+    source = f"cfg = env_load({str(path)!r})\n"
+
+    ns = _run(expand_macros(source))
+
+    assert ns['cfg'] == {'HOST': 'localhost', 'PORT': '8080'}
+
+
+def test_walk_files_expansion_executes(tmp_path):
+    (tmp_path / 'sub').mkdir()
+    (tmp_path / 'a.py').write_text('')
+    (tmp_path / 'sub' / 'b.py').write_text('')
+    (tmp_path / 'c.txt').write_text('')
+    source = f"files = walk_files({str(tmp_path)!r}, '*.py')\n"
+
+    expanded = expand_macros(source)
+    ns = _run(expanded)
+
+    assert [f.split('/')[-1].split('\\\\')[-1] for f in ns['files']] == ['a.py', 'b.py']
+    assert 'import pathlib' in expanded
+
+
 def test_misused_macro_raises():
     with pytest.raises(MacroError):
         expand_macros("jload('x.json')\n")  # missing assignment target
