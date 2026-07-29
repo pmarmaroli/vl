@@ -4,7 +4,7 @@
 **Version:** 0.1.3-alpha  
 **Last Updated:** February 3, 2026  
 
-**Repository:** https://github.com/pmarmaroli/vibe-language  
+**Repository:** https://github.com/pmarmaroli/vl  
 **Documentation:** See README.md for setup and getting started  
 
 
@@ -30,12 +30,11 @@
 
 ```bash
 # 1. Clone repository
-git clone https://github.com/pmarmaroli/vibe-language.git
-cd vibe-language
+git clone https://github.com/pmarmaroli/vl.git
+cd vl
 
 # 2. Set Python path (required for compiler)
-export PYTHONPATH="$PWD/src"  # Unix/Mac
-$env:PYTHONPATH="$PWD\src"    # Windows PowerShell
+pip install -e .
 
 # 3. Run your first program
 ./vl examples/basic/hello.vl

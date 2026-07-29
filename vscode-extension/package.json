@@ -1,13 +1,13 @@
 {
   "name": "vl-cost-optimizer",
   "displayName": "VL AI Cost Optimizer",
-  "description": "Cut your AI coding costs by 45% - Automatic token optimization for GitHub Copilot and AI assistants",
+  "description": "Cut your AI coding costs - Automatic token optimization (measured 20-30% savings, up to ~57% with VL v2 macros) for GitHub Copilot and AI assistants",
   "version": "0.2.1-alpha",
   "publisher": "vibe",
   "icon": "icon.png",
   "repository": {
     "type": "git",
-    "url": "https://github.com/pmarmaroli/vibe-language.git"
+    "url": "https://github.com/pmarmaroli/vl.git"
   },
   "engines": {
     "vscode": "^1.108.0"
@@ -138,7 +138,7 @@
       {
         "id": "vl.optimizer",
         "name": "vl",
-        "description": "VL token optimizer - reduces AI request costs by 45%",
+        "description": "VL token optimizer - measured 20-30% token savings on typical Python",
         "isSticky": true
       }
     ],

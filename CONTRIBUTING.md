@@ -10,17 +10,15 @@ Thank you for your interest in contributing! This guide will help you get starte
 
 ```bash
 # Clone and setup
-git clone https://github.com/pmarmaroli/vibe-language.git
-cd vibe-language
-export PYTHONPATH="$PWD/src"  # Unix/Mac
-$env:PYTHONPATH="$PWD\src"    # Windows
+git clone https://github.com/pmarmaroli/vl.git
+cd vl
+pip install -e ".[dev]"
 
 # Verify installation
-./vl examples/basic/hello.vl
+vl examples/basic/hello.vl
 
 # Run tests
-python tests/codegen/test_codegen_all.py
-python tests/benchmarks/run_benchmarks.py
+pytest
 ```
 
 ### 2. Make Your Changes
@@ -30,7 +28,7 @@ python tests/benchmarks/run_benchmarks.py
 git checkout -b feature/your-feature
 
 # Make changes and test
-python tests/codegen/test_codegen_all.py
+pytest
 
 # Commit with clear message
 git commit -m "feat: add support for X"
@@ -63,7 +61,7 @@ git push origin feature/your-feature
 - Add test cases
 - Fix typos and formatting
 
-**Check [Issues](https://github.com/pmarmaroli/vibe-language/issues) labeled `good first issue`**
+**Check [Issues](https://github.com/pmarmaroli/vl/issues) labeled `good first issue`**
 
 ---
 
@@ -75,9 +73,7 @@ git push origin feature/your-feature
 
 ```bash
 # Run all tests (must pass 100%)
-python tests/codegen/test_codegen_all.py
-python tests/integration/test_realworld_py2vl.py
-python tests/benchmarks/run_benchmarks.py
+pytest
 ```
 
 **Adding new features:**
@@ -171,14 +167,14 @@ Include:
 - Example code showing the feature
 - Alternatives considered
 
-**Use [GitHub Issues](https://github.com/pmarmaroli/vibe-language/issues) or [Discussions](https://github.com/pmarmaroli/vibe-language/discussions)**
+**Use [GitHub Issues](https://github.com/pmarmaroli/vl/issues) or [Discussions](https://github.com/pmarmaroli/vl/discussions)**
 
 ---
 
 ## Project Structure
 
 ```
-vibe-language/
+vl/
 ├── src/vl/              # Core compiler
 │   ├── lexer.py         # Tokenizer
 │   ├── parser.py        # AST generator
@@ -199,9 +195,9 @@ vibe-language/
 
 ## Community
 
-- **Questions:** [GitHub Discussions](https://github.com/pmarmaroli/vibe-language/discussions)
-- **Bug Reports:** [GitHub Issues](https://github.com/pmarmaroli/vibe-language/issues)
-- **Feature Requests:** [GitHub Discussions](https://github.com/pmarmaroli/vibe-language/discussions)
+- **Questions:** [GitHub Discussions](https://github.com/pmarmaroli/vl/discussions)
+- **Bug Reports:** [GitHub Issues](https://github.com/pmarmaroli/vl/issues)
+- **Feature Requests:** [GitHub Discussions](https://github.com/pmarmaroli/vl/discussions)
 
 ---
 
@@ -241,6 +237,6 @@ Significant contributors may be invited to the core team.
 
 ---
 
-**Questions?** Open an [issue](https://github.com/pmarmaroli/vibe-language/issues) or [discussion](https://github.com/pmarmaroli/vibe-language/discussions). We're here to help!
+**Questions?** Open an [issue](https://github.com/pmarmaroli/vl/issues) or [discussion](https://github.com/pmarmaroli/vl/discussions). We're here to help!
 
 **Thank you for contributing to VL!** 🚀

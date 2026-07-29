@@ -1,6 +1,6 @@
 # VL AI Cost Optimizer
 
-**Cut your AI coding costs by 45% — automatically.**
+**Cut your AI coding costs — automatically.** (measured 20–30% token savings via semantic minification, up to ~57% with VL v2 macros)
 
 VL is a VS Code extension that optimizes AI coding assistant requests, reducing token usage and costs without requiring you to learn a new language.
 
@@ -11,7 +11,7 @@ VL is a VS Code extension that optimizes AI coding assistant requests, reducing 
 - Optimizes Python code to VL format before sending to Claude/AI
 - **Zero learning curve** - Keep writing Python normally
 - **Real-time cost savings tracking** - Dashboard with daily/weekly/monthly stats
-- **45% average token reduction** - Verified with actual Claude tokenizer
+- **Measured 20–30% token reduction** on typical Python (semantic minification, verified with a real LLM tokenizer)
 - **Smart fallback** - Validates Python syntax, gracefully handles conversion errors
 - **Apply code buttons** - One-click application of AI responses
 
@@ -24,7 +24,7 @@ VL is a VS Code extension that optimizes AI coding assistant requests, reducing 
 ## Quick Start
 
 1. **Install the extension**
-2. **Add your Anthropic API key** to VS Code settings (`vl.anthropicApiKey`)
+2. **Add your Anthropic API key** with the command `VL: Set Anthropic API Key` (stored in VS Code secure storage)
 3. **Open VS Code chat** (`Ctrl+Shift+I` or `Cmd+Shift+I`)
 4. **Use `@vl` to activate optimization:**
    ```
@@ -37,7 +37,7 @@ VL is a VS Code extension that optimizes AI coding assistant requests, reducing 
 When you use `@vl` in chat, the extension:
 1. Extracts referenced Python files
 2. Validates syntax (prevents corrupted file conversions)
-3. Converts to VL format (45% token reduction)
+3. Optimizes the code (semantic minification by default; VL v2 macros for higher savings)
 4. Sends optimized request to Claude with prompt caching
 5. Tracks savings in persistent analytics
 6. Shows "Apply Code" buttons for easy implementation
@@ -81,7 +81,7 @@ When you use `@vl` in chat, the extension:
 - ✅ **Persistent Storage** - Analytics saved across VS Code sessions
 
 **Performance:**
-- 45% average token reduction on Python code
+- Measured 20–30% token reduction on typical Python code (more with VL v2 macros)
 - Validated with real Claude API measurements
 - Supports Python initially (JavaScript/TypeScript coming soon)
 

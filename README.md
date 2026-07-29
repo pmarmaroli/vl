@@ -42,10 +42,10 @@
 
 **Installation:**
 
-1. Download latest [.vsix from Releases](https://github.com/pmarmaroli/vibe-language/releases)
+1. Download latest [.vsix from Releases](https://github.com/pmarmaroli/vl/releases)
 2. VS Code → Extensions (`Ctrl+Shift+X`) → `...` menu → **Install from VSIX...**
 3. Reload VS Code
-4. Add Anthropic API key: Settings → `vl.anthropicApiKey`
+4. Add your Anthropic API key: Command Palette → `VL: Set Anthropic API Key` (stored in VS Code secure storage)
 
 **Usage:**
 
@@ -72,25 +72,22 @@
 **Installation:**
 
 ```bash
-git clone https://github.com/pmarmaroli/vibe-language.git
-cd vibe-language
+git clone https://github.com/pmarmaroli/vl.git
+cd vl
+pip install -e .
 
-# Set Python path
-export PYTHONPATH="$PWD/src"  # Unix/Mac
-$env:PYTHONPATH="$PWD\src"    # Windows
-
-# Verify
-./vl examples/basic/hello.vl
+# Verify — the install provides the vl, vl-minify, vl2 and py2vl commands
+vl examples/basic/hello.vl
 ```
 
 **Minify Python for LLM use (recommended — measured 20–30% savings):**
 
 ```bash
 # Semantics-preserving minification (AST-verified)
-python -m vl.py_minify script.py -o script.min.py
+vl-minify script.py -o script.min.py
 
 # Measure real token savings on your own files
-pip install mistral-common
+pip install -e ".[benchmarks]"
 python tests/benchmarks/real_token_benchmark.py script.py
 ```
 
@@ -98,13 +95,13 @@ python tests/benchmarks/real_token_benchmark.py script.py
 
 ```bash
 # Print the macro spec to include in your LLM prompt (117 tokens, cacheable)
-python -m vl.v2 --spec
+vl2 --spec
 
 # Compress existing Python patterns into macros before sending to an LLM
-python -m vl.v2 -c script.py
+vl2 -c script.py
 
 # Expand LLM-generated macro code to dependency-free Python
-python -m vl.v2 generated.py -o runnable.py
+vl2 generated.py -o runnable.py
 
 # Validate every macro against the real tokenizer
 python tests/benchmarks/v2_macro_benchmark.py
@@ -114,18 +111,18 @@ python tests/benchmarks/v2_macro_benchmark.py
 
 ```bash
 # Convert existing Python file
-python -m vl.py2vl script.py -o script.vl
+py2vl script.py -o script.vl
 
 # Compile back to Python
-./vl script.vl -o script_output.py
+vl script.vl -o script_output.py
 ```
 
 **Compile VL to multiple targets:**
 
 ```bash
-./vl program.vl --target python -o output.py
-./vl program.vl --target javascript -o output.js
-./vl program.vl --target typescript -o output.ts
+vl program.vl --target python -o output.py
+vl program.vl --target javascript -o output.js
+vl program.vl --target typescript -o output.ts
 ```
 
 ---
@@ -269,7 +266,7 @@ A: Use the transparent mode VS Code extension in production. Don't deploy VL sou
 A: The Python→VL converter supports full-module passthrough; use `py:__RAW__` (or base64) to preserve semantics on any module.
 
 **Q: How do I get the extension?**  
-A: Download from [Releases](https://github.com/pmarmaroli/vibe-language/releases) or package from source.
+A: Download from [Releases](https://github.com/pmarmaroli/vl/releases) or package from source.
 
 ---
 
@@ -289,17 +286,16 @@ A: Download from [Releases](https://github.com/pmarmaroli/vibe-language/releases
 ## Contributing
 
 We welcome:
-- Bug reports ([Issues](https://github.com/pmarmaroli/vibe-language/issues))
-- Feature requests ([Discussions](https://github.com/pmarmaroli/vibe-language/discussions))
+- Bug reports ([Issues](https://github.com/pmarmaroli/vl/issues))
+- Feature requests ([Discussions](https://github.com/pmarmaroli/vl/discussions))
 - Code contributions (see [CONTRIBUTING.md](CONTRIBUTING.md))
 
 **Running Tests:**
 
 ```bash
-cd vibe-language
-export PYTHONPATH="$PWD/src"
-python tests/codegen/test_codegen_all.py
-python tests/benchmarks/run_benchmarks.py
+cd vl
+pip install -e ".[dev]"
+pytest
 ```
 
 ---
@@ -309,12 +305,9 @@ python tests/benchmarks/run_benchmarks.py
 - [Token Analysis (real-tokenizer measurements)](docs/token-analysis.md)
 - [VL v2 Design (tokenizer-aware macros)](docs/vl2-design.md)
 - [Language Specification](docs/specification.md)
-- [Releases](https://github.com/pmarmaroli/vibe-language/releases)
-- [Issues](https://github.com/pmarmaroli/vibe-language/issues)
-- [Discussions](https://github.com/pmarmaroli/vibe-language/discussions)
-- [Artifacts (logs/scratch outputs)](artifacts)
-- [Helper scripts](scripts) (one-off maintenance utilities)
-- [Legacy root tests/fixtures](tests/manual/root-legacy)
+- [Releases](https://github.com/pmarmaroli/vl/releases)
+- [Issues](https://github.com/pmarmaroli/vl/issues)
+- [Discussions](https://github.com/pmarmaroli/vl/discussions)
 
 ---
 
@@ -326,5 +319,5 @@ See [LICENSE.md](LICENSE.md) for details.
 
 ---
 
-**[⭐ Star this repo](https://github.com/pmarmaroli/vibe-language) to follow development!**
+**[⭐ Star this repo](https://github.com/pmarmaroli/vl) to follow development!**
 
