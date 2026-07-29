@@ -26,7 +26,7 @@ export class TransparentModeManager {
         private logger: Logger,
         private analytics: AnalyticsTracker
     ) {
-        this.claudeClient = new ClaudeClient(logger);
+        this.claudeClient = new ClaudeClient(logger, context.secrets);
     }
     
     async activate() {

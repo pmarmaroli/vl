@@ -18,6 +18,9 @@ export interface CacheStats {
 }
 
 export class ClaudeClient {
+    /** Key under which the Anthropic API key is stored in SecretStorage */
+    private static readonly API_KEY_SECRET = 'vl.claude.apiKey';
+
     private anthropic: Anthropic | null = null;
     private stats: CacheStats = {
         cacheWrites: 0,
@@ -26,9 +29,68 @@ export class ClaudeClient {
         specTokensSaved: 0,
         dollarsSavedFromCache: 0
     };
-    
-    constructor(private logger: Logger) {}
-    
+
+    constructor(private logger: Logger, private secrets: vscode.SecretStorage) {}
+
+    /**
+     * Get the API key from SecretStorage, migrating any key previously
+     * stored in plain-text settings (vl.claude.apiKey) into secure storage.
+     */
+    async getApiKey(): Promise<string | undefined> {
+        let apiKey = await this.secrets.get(ClaudeClient.API_KEY_SECRET);
+        if (apiKey) {
+            return apiKey;
+        }
+
+        // One-time migration from the old plain-text setting
+        const config = vscode.workspace.getConfiguration('vl');
+        const legacyKey = config.get<string>('claude.apiKey', '');
+        if (legacyKey && legacyKey.trim()) {
+            await this.secrets.store(ClaudeClient.API_KEY_SECRET, legacyKey.trim());
+            await config.update('claude.apiKey', undefined, vscode.ConfigurationTarget.Global);
+            this.logger.info('Migrated Anthropic API key from settings to secure storage');
+            return legacyKey.trim();
+        }
+        return undefined;
+    }
+
+    /**
+     * Whether an API key is available (without prompting the user)
+     */
+    async hasApiKey(): Promise<boolean> {
+        return !!(await this.getApiKey());
+    }
+
+    /**
+     * Prompt the user for an API key and store it in SecretStorage.
+     * Returns the key, or undefined if the user cancelled.
+     */
+    async promptForApiKey(): Promise<string | undefined> {
+        const inputKey = await vscode.window.showInputBox({
+            prompt: 'Enter your Anthropic API key (starts with sk-ant-). It is stored in VS Code secure storage, never in settings.',
+            password: true,
+            placeHolder: 'sk-ant-api03-...',
+            ignoreFocusOut: true
+        });
+
+        if (!inputKey || !inputKey.trim()) {
+            return undefined;
+        }
+
+        await this.secrets.store(ClaudeClient.API_KEY_SECRET, inputKey.trim());
+        this.anthropic = null; // Recreate the client with the new key
+        this.logger.info('Anthropic API key saved to secure storage');
+        return inputKey.trim();
+    }
+
+    /**
+     * Remove the stored API key
+     */
+    async clearApiKey(): Promise<void> {
+        await this.secrets.delete(ClaudeClient.API_KEY_SECRET);
+        this.anthropic = null;
+    }
+
     /**
      * Initialize the Claude client with API key
      */
@@ -36,40 +98,27 @@ export class ClaudeClient {
         if (this.anthropic) {
             return this.anthropic;
         }
-        
-        // Get API key from settings
-        const config = vscode.workspace.getConfiguration('vl');
-        let apiKey = config.get<string>('claude.apiKey', '');
-        
-        // If no API key in settings, prompt user
+
+        let apiKey = await this.getApiKey();
         if (!apiKey) {
-            const inputKey = await vscode.window.showInputBox({
-                prompt: 'Enter your Anthropic API key (starts with sk-ant-)',
-                password: true,
-                placeHolder: 'sk-ant-api03-...',
-                ignoreFocusOut: true
-            });
-            
-            if (!inputKey) {
+            apiKey = await this.promptForApiKey();
+            if (!apiKey) {
                 return null;
             }
-            
-            apiKey = inputKey;
-            
-            // Ask if user wants to save it
-            const save = await vscode.window.showQuickPick(['Yes', 'No'], {
-                placeHolder: 'Save API key to settings?'
-            });
-            
-            if (save === 'Yes') {
-                await config.update('claude.apiKey', apiKey, vscode.ConfigurationTarget.Global);
-            }
         }
-        
+
         this.anthropic = new Anthropic({ apiKey });
         this.logger.info('Claude client initialized with prompt caching enabled');
-        
+
         return this.anthropic;
+    }
+
+    /**
+     * Model used for completions (configurable via vl.claude.model)
+     */
+    private getModel(): string {
+        const config = vscode.workspace.getConfiguration('vl');
+        return config.get<string>('claude.model', 'claude-sonnet-5') || 'claude-sonnet-5';
     }
     
     /**
@@ -104,7 +153,7 @@ export class ClaudeClient {
 
         try {
             const response = await client.messages.create({
-                model: "claude-sonnet-4-20250514",
+                model: this.getModel(),
                 max_tokens: 4096,  // Increased for longer responses
                 system: this.buildSystemPrompt(context),
                 messages: [
@@ -139,11 +188,9 @@ export class ClaudeClient {
             
             // Handle specific errors
             if (error.status === 401) {
-                vscode.window.showErrorMessage('Invalid Anthropic API key. Please update in settings.');
-                // Clear invalid key
-                const config = vscode.workspace.getConfiguration('vl');
-                await config.update('claude.apiKey', '', vscode.ConfigurationTarget.Global);
-                this.anthropic = null;
+                vscode.window.showErrorMessage('Invalid Anthropic API key. Run "VL: Set Anthropic API Key" to update it.');
+                // Clear invalid key from secure storage
+                await this.clearApiKey();
             } else if (error.status === 429) {
                 vscode.window.showWarningMessage('Claude API rate limit exceeded. Please try again later.');
             } else {

@@ -81,8 +81,8 @@ export class VLChatParticipant {
         
         const config = vscode.workspace.getConfiguration('vl');
         const debugEnabled = config.get<boolean>('debug.enabled', false);
-        const apiKey = config.get<string>('claude.apiKey', '');
-        const isMonitoringMode = !apiKey || apiKey.trim() === '';
+        const hasApiKey = this.claudeClient ? await this.claudeClient.hasApiKey() : false;
+        const isMonitoringMode = !hasApiKey;
         
         try {
             // Extract file references from the request
@@ -202,7 +202,7 @@ export class VLChatParticipant {
                     const monthlySavings = (totalSaved * 0.003 * 100).toFixed(2); // Assume 100 requests/month
                     stream.markdown(`\n💡 **Potential Monthly Savings:** $${monthlySavings} _(based on 100 similar requests)_\n`);
                     stream.markdown(`\n_Upgrade to Premium to activate real-time optimization with Claude API_\n`);
-                    stream.markdown(`→ Add your Anthropic API key in settings: \`vl.claude.apiKey\`\n\n`);
+                    stream.markdown(`→ Add your Anthropic API key with the command: \`VL: Set Anthropic API Key\`\n\n`);
                 } else {
                     stream.markdown(`\n✅ **Real-time optimization active**\n\n`);
                 }

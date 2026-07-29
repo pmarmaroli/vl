@@ -38,6 +38,13 @@ export function activate(context: vscode.ExtensionContext) {
     
     // Register commands
     context.subscriptions.push(
+        vscode.commands.registerCommand('vl.setApiKey', async () => {
+            const key = await transparentMode.getClaudeClient().promptForApiKey();
+            if (key) {
+                vscode.window.showInformationMessage('Anthropic API key saved to secure storage.');
+            }
+        }),
+
         vscode.commands.registerCommand('vl.showDashboard', () => {
             dashboard.show();
         }),

@@ -114,7 +114,13 @@
         "vl.claude.apiKey": {
           "type": "string",
           "default": "",
-          "description": "Anthropic API key (starts with sk-ant-) for VL-optimized completions"
+          "description": "Deprecated - do not use. The API key is now kept in VS Code secure storage; run \"VL: Set Anthropic API Key\" instead. Any value here is migrated to secure storage and removed on next use.",
+          "deprecationMessage": "Stored in plain text. Use the \"VL: Set Anthropic API Key\" command instead (secure storage)."
+        },
+        "vl.claude.model": {
+          "type": "string",
+          "default": "claude-sonnet-5",
+          "description": "Claude model used for completions (e.g. claude-sonnet-5, claude-opus-5)"
         },
         "vl.claude.enableCompletions": {
           "type": "boolean",
@@ -137,6 +143,11 @@
       }
     ],
     "commands": [
+      {
+        "command": "vl.setApiKey",
+        "title": "VL: Set Anthropic API Key",
+        "category": "VL"
+      },
       {
         "command": "vl.showDashboard",
         "title": "VL: Show Cost Savings Dashboard",
