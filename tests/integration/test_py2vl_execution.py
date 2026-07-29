@@ -1,112 +1,78 @@
-"""Test if generated code is functionally correct by executing it"""
+"""Convert real-world Python patterns to VL, compile back, and execute both."""
+
+import pytest
+
 from vl.py_to_vl import convert_python_to_vl
 from vl.compiler import Compiler, TargetLanguage
-import sys
-import io
-import traceback
 
-def test_execution(name, python_code):
-    print(f"\n{'='*60}")
-    print(f"Test: {name}")
-    print(f"{'='*60}")
-    
-    # Execute original
-    print("Executing original Python...")
-    try:
-        exec_globals = {}
-        exec(python_code, exec_globals)
-        print("✓ Original executes successfully")
-        original_works = True
-    except Exception as e:
-        print(f"✗ Original failed: {e}")
-        original_works = False
-    
-    # Convert to VL
-    try:
-        vl_code = convert_python_to_vl(python_code)
-    except Exception as e:
-        print(f"✗ Conversion failed: {e}")
-        return False
-    
-    # Compile back to Python
-    try:
-        compiler = Compiler(vl_code, TargetLanguage.PYTHON)
-        generated_python = compiler.compile()
-    except Exception as e:
-        print(f"✗ Compilation failed: {e}")
-        return False
-    
-    # Execute generated
-    print("Executing generated Python...")
-    try:
-        exec_globals = {}
-        exec(generated_python, exec_globals)
-        print("✓ Generated executes successfully")
-        generated_works = True
-    except Exception as e:
-        print(f"✗ Generated failed: {e}")
-        print(f"\nGenerated code:")
-        print(generated_python)
-        traceback.print_exc()
-        generated_works = False
-    
-    return original_works and generated_works
-
-# Test real-world Python code patterns
-tests = [
-    ("Simple assignment", "x = 1\ny = 2\nz = x + y"),
-    
-    ("Function definition", """
+CASES = [
+    ("simple_assignment", "x = 1\ny = 2\nz = x + y"),
+    (
+        "function_definition",
+        """
 def add(a, b):
     return a + b
 result = add(5, 3)
-"""),
-    
-    ("Dict subscript assignment", """
+""",
+    ),
+    (
+        "dict_subscript_assignment",
+        """
 settings = {"downlink": {}}
 settings["downlink"]["delay"] = 100
-"""),
-    
-    ("If statement", """
+""",
+    ),
+    (
+        "if_statement",
+        """
 x = 10
 if x > 5:
     result = "large"
 else:
     result = "small"
-"""),
-    
-    ("For loop", """
+""",
+    ),
+    (
+        "for_loop",
+        """
 total = 0
 for i in range(5):
     total += i
-"""),
-    
-    ("List comprehension", """
+""",
+    ),
+    (
+        "list_comprehension",
+        """
 numbers = [1, 2, 3, 4, 5]
 squares = [x * x for x in numbers]
-"""),
-    
-    ("Try-except", """
+""",
+    ),
+    (
+        "try_except",
+        """
 try:
     x = 1 / 1
     result = "ok"
 except:
     result = "error"
-"""),
+""",
+    ),
 ]
 
-results = []
-for name, code in tests:
-    success = test_execution(name, code)
-    results.append((name, success))
 
-print(f"\n\n{'='*60}")
-print("SUMMARY")
-print(f"{'='*60}")
-passed = sum(1 for _, success in results if success)
-total = len(results)
-print(f"Passed: {passed}/{total} ({passed/total*100:.1f}%)")
-print()
-for name, success in results:
-    status = "✓" if success else "✗"
-    print(f"{status} {name}")
+@pytest.mark.parametrize("name,python_code", CASES, ids=[c[0] for c in CASES])
+def test_py2vl_execution(name, python_code):
+    # The original sample must execute
+    exec(python_code, {})
+
+    vl_code = convert_python_to_vl(python_code)
+    generated_python = Compiler(vl_code, TargetLanguage.PYTHON).compile()
+
+    # The regenerated Python must also execute
+    try:
+        exec(generated_python, {})
+    except Exception as e:
+        pytest.fail(
+            f"{name}: generated Python failed ({type(e).__name__}: {e})\n"
+            f"VL:\n{vl_code}\n\nGenerated:\n{generated_python}"
+        )

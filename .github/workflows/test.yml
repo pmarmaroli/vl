@@ -9,58 +9,47 @@ on:
 env:
   PYTHONIOENCODING: utf-8
   PYTHONUTF8: 1
-  PYTHONPATH: ${{ github.workspace }}/src
 
 jobs:
   test:
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        python-version: ['3.9', '3.10', '3.11']
-    
+        python-version: ['3.9', '3.10', '3.11', '3.12', '3.13']
+
     steps:
-    - uses: actions/checkout@v3
-    
+    - uses: actions/checkout@v4
+
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
-    
-    - name: Display Python version
-      run: python --version
-    
-    - name: Run configuration tests
-      run: python tests/unit/test_config.py
-    
-    - name: Run multi-target boolean tests
-      run: python tests/codegen/test_multi_target_boolean.py
-    
-    - name: Run comprehensive codegen tests
-      run: python tests/codegen/test_codegen_all.py
-    
-    - name: Run integration tests
-      run: |
-        python tests/integration/test_edge_cases.py
-        python tests/integration/test_execution.py
-        python tests/integration/test_final_validation.py
-        python tests/integration/test_js_codegen.py
-        python tests/integration/test_py_passthrough.py
-    
-    - name: Run unit tests
-      run: python tests/unit/test_type_checker.py
-    
-    - name: Install Node.js for JavaScript tests
-      uses: actions/setup-node@v3
+
+    - name: Install package and test dependencies
+      run: pip install -e ".[dev]"
+
+    - name: Run test suite
+      run: pytest -q
+
+    - name: Set up Node.js for JavaScript smoke test
+      uses: actions/setup-node@v4
       with:
-        node-version: '18'
-    
-    - name: Test CLI compilation (Python target)
+        node-version: '20'
+
+    - name: CLI smoke test (Python target)
       run: |
-        python -m vl.cli examples/basic/loops.vl --target python --output test_output_py.py
+        vl examples/basic/loops.vl --target python --output test_output_py.py
         python test_output_py.py
-    
-    - name: Test CLI compilation (JavaScript target)
+
+    - name: CLI smoke test (JavaScript target)
       run: |
-        python -m vl.cli examples/basic/loops.vl --target javascript --output test_output_js.js
+        vl examples/basic/loops.vl --target javascript --output test_output_js.js
         node test_output_js.js
+
+    - name: Minifier and v2 smoke tests
+      run: |
+        vl-minify src/vl/py_minify.py > /dev/null
+        vl2 --spec > /dev/null
+      shell: bash

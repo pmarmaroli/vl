@@ -25,7 +25,7 @@ from .logging_config import setup_logging, get_logger
 logger = get_logger(__name__)
 
 # Version info
-__version__ = "0.1.0-alpha"
+from . import __version__
 __author__ = "Patrick Marmaroli"
 
 def main():

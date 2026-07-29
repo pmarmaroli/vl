@@ -5,7 +5,7 @@ A token-efficient, multi-target programming language designed for
 optimal collaboration between humans and AI language models.
 """
 
-__version__ = "0.1.3"
+__version__ = "0.2.0a0"
 __author__ = "VL Contributors"
 
 from .compiler import Compiler, TargetLanguage
