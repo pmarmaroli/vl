@@ -1,6 +1,6 @@
 /**
- * VL Converter - Bridge to Python-based VL compiler
- * Handles bidirectional conversion: Python/JS/TS ↔ VL
+ * VL Converter - Bridge to the Python-based VL (Very Little) toolkit
+ * (semantic minifier + v2 macro compression)
  */
 
 import * as vscode from 'vscode';
@@ -11,15 +11,15 @@ import * as child_process from 'child_process';
 import { Logger } from '../utils/logger';
 import { estimateTokens } from '../utils/tokenEstimator';
 
-export type OptimizationMode = 'minify' | 'v2' | 'vl' | 'auto';
+export type OptimizationMode = 'minify' | 'v2' | 'auto';
 
 export interface OptimizationResult {
     content: string;
     /**
      * 'python-min' = minified plain Python, 'v2' = minified Python with VL v2
-     * macros, 'vl' = VL syntax, 'original' = unchanged
+     * macros, 'original' = unchanged
      */
-    format: 'python-min' | 'v2' | 'vl' | 'original';
+    format: 'python-min' | 'v2' | 'original';
     originalTokens: number;
     optimizedTokens: number;
     /** VL v2 macro spec to include in the prompt (set only for format 'v2') */
@@ -34,81 +34,55 @@ interface V2Result {
 
 export class VLConverter {
     private pythonPath: string;
-    private converterScript: string;
     private vlRoot: string;
-    
+
     constructor(
         private context: vscode.ExtensionContext,
         private logger: Logger
     ) {
         const config = vscode.workspace.getConfiguration('vl');
         this.pythonPath = config.get<string>('compiler.pythonPath', 'python');
-        
-        // 1. Check for bundled VL compiler in extension directory
-        const bundledCompilerPath = path.join(context.extensionPath, 'vl-compiler', 'src', 'vl', 'py2vl.py');
+
+        // 1. Check for a bundled VL toolkit in the extension directory
+        const bundledToolkitPath = path.join(context.extensionPath, 'vl-compiler', 'src', 'vl', 'py_minify.py');
         let foundVlRoot: string | undefined;
-        
-        if (require('fs').existsSync(bundledCompilerPath)) {
+
+        if (require('fs').existsSync(bundledToolkitPath)) {
             foundVlRoot = path.join(context.extensionPath, 'vl-compiler');
-            this.logger.info('Using bundled VL compiler', { path: foundVlRoot });
+            this.logger.info('Using bundled VL toolkit', { path: foundVlRoot });
         }
-        
-        // 2. Check workspace folders for vibe-language repo
+
+        // 2. Check workspace folders for the vl repo
         if (!foundVlRoot) {
             const workspaceFolders = vscode.workspace.workspaceFolders;
             if (workspaceFolders) {
                 for (const folder of workspaceFolders) {
                     const candidatePath = folder.uri.fsPath;
-                    const converterPath = path.join(candidatePath, 'src', 'vl', 'py2vl.py');
-                    
-                    if (require('fs').existsSync(converterPath)) {
+                    const toolkitPath = path.join(candidatePath, 'src', 'vl', 'py_minify.py');
+
+                    if (require('fs').existsSync(toolkitPath)) {
                         foundVlRoot = candidatePath;
-                        this.logger.debug('Found VL compiler in workspace', { path: candidatePath });
+                        this.logger.debug('Found VL toolkit in workspace', { path: candidatePath });
                         break;
                     }
                 }
             }
         }
-        
+
         // 3. Fallback: sibling directory (for development)
         if (!foundVlRoot) {
-            foundVlRoot = path.resolve(context.extensionPath, '..', '..', 'vibe-language');
-            this.logger.warn('Using fallback VL path - compiler may not be available', { path: foundVlRoot });
+            foundVlRoot = path.resolve(context.extensionPath, '..', '..', 'vl');
+            this.logger.warn('Using fallback VL path - toolkit may not be available', { path: foundVlRoot });
         }
-        
+
         this.vlRoot = foundVlRoot;
-        this.converterScript = path.join(this.vlRoot, 'src', 'vl', 'py2vl.py');
-        
+
         this.logger.debug('VLConverter initialized', {
             pythonPath: this.pythonPath,
-            vlRoot: this.vlRoot,
-            converterScript: this.converterScript
+            vlRoot: this.vlRoot
         });
     }
-    
-    /**
-     * Convert source code to VL
-     */
-    async toVL(code: string, language: 'python' | 'javascript' | 'typescript'): Promise<string> {
-        this.logger.debug(`Converting ${language} to VL (${code.length} chars)`);
-        
-        if (language === 'python') {
-            // Skip syntax validation for large files (causes ENAMETOOLONG on Windows)
-            // The py2vl converter will catch syntax errors anyway
-            if (code.length < 5000) {
-                const syntaxCheck = await this.validatePythonSyntax(code);
-                if (!syntaxCheck.valid) {
-                    throw new Error(`Python syntax error: ${syntaxCheck.error}`);
-                }
-            }
-            
-            return this.pythonToVL(code);
-        } else {
-            // JavaScript/TypeScript conversion not yet implemented
-            throw new Error(`${language} → VL conversion not yet implemented. Python conversion available now.`);
-        }
-    }
-    
+
     /**
      * Optimize code for LLM token efficiency according to the configured mode.
      *
@@ -117,9 +91,7 @@ export class VLConverter {
      * - 'v2': macro compression + minification. Highest savings (~57% on
      *   pattern-rich code); the small macro spec is included in the prompt
      *   only when macros were actually detected.
-     * - 'vl': legacy VL conversion.
-     * - 'auto': run all and keep whichever estimates cheapest (VL tokens are
-     *   estimated with the VL-specific ratio; see tokenEstimator).
+     * - 'auto': run both and keep whichever estimates cheapest.
      *
      * Never returns something more expensive than the original (spec
      * overhead included in the comparison).
@@ -135,7 +107,7 @@ export class VLConverter {
 
         const candidates: Array<{
             content: string;
-            format: 'python-min' | 'v2' | 'vl';
+            format: 'python-min' | 'v2';
             tokens: number;
             spec?: string;
         }> = [];
@@ -165,21 +137,6 @@ export class VLConverter {
                 });
             }
         }
-        if (effectiveMode === 'vl' || effectiveMode === 'auto') {
-            try {
-                const vlCode = await this.toVL(code, language);
-                candidates.push({
-                    content: vlCode,
-                    format: 'vl',
-                    tokens: estimateTokens(vlCode, 'vl')
-                });
-            } catch (error) {
-                this.logger.debug('VL conversion unavailable for this input', {
-                    error: (error as Error)?.message?.substring(0, 100)
-                });
-            }
-        }
-
         const best = candidates
             .filter(c => c.tokens < originalTokens)
             .sort((a, b) => a.tokens - b.tokens)[0];
@@ -243,108 +200,6 @@ export class VLConverter {
         }
     }
 
-    /**
-     * Validate Python syntax before conversion.
-     * Uses ast.parse on stdin — never executes the user's code.
-     */
-    private async validatePythonSyntax(code: string): Promise<{ valid: boolean; error?: string }> {
-        return new Promise((resolve) => {
-            const env = { ...process.env, PYTHONPATH: path.join(this.vlRoot, 'src') };
-            const proc = child_process.spawn(
-                this.pythonPath,
-                ['-c', 'import ast, sys; ast.parse(sys.stdin.read())'],
-                { env }
-            );
-            proc.stdin?.on('error', () => { /* process exited early; close handler reports */ });
-            proc.stdin?.write(code);
-            proc.stdin?.end();
-            
-            let stderr = '';
-            proc.stderr.on('data', (data) => {
-                stderr += data.toString();
-            });
-            
-            proc.on('close', (code) => {
-                if (code === 0) {
-                    resolve({ valid: true });
-                } else {
-                    // Extract just the error message, not full traceback
-                    const errorMatch = stderr.match(/SyntaxError: (.+)/);
-                    const error = errorMatch ? errorMatch[1] : 'Invalid Python syntax';
-                    resolve({ valid: false, error });
-                }
-            });
-            
-            proc.on('error', (err) => {
-                resolve({ valid: false, error: err.message });
-            });
-            
-            // Timeout after 2 seconds
-            setTimeout(() => {
-                proc.kill();
-                resolve({ valid: false, error: 'Syntax check timeout' });
-            }, 2000);
-        });
-    }
-    
-    /**
-     * Convert VL code to target language
-     */
-    async fromVL(vlCode: string, targetLanguage: 'python' | 'javascript' | 'typescript'): Promise<string> {
-        this.logger.debug(`Converting VL to ${targetLanguage} (${vlCode.length} chars)`);
-        
-        const args = [
-            '-m', 'vl.cli',
-            '--target', targetLanguage === 'typescript' ? 'typescript' : 
-                       targetLanguage === 'javascript' ? 'javascript' : 'python',
-            '-'  // Read from stdin
-        ];
-        
-        try {
-            const result = await this.runPython(args, vlCode);
-            this.logger.debug(`Conversion complete: ${result.length} chars`);
-            return result;
-        } catch (error) {
-            this.logger.error('VL compilation failed', error);
-            throw error;
-        }
-    }
-    
-    /**
-     * Convert Python code to VL using py2vl module
-     */
-    private async pythonToVL(pythonCode: string): Promise<string> {
-        const args = [
-            '-m', 'vl.py2vl',
-            '-'  // Read from stdin
-        ];
-        
-        try {
-            const result = await this.runPython(args, pythonCode);
-            this.logger.debug(`Python → VL conversion complete: ${result.length} chars`);
-            return result;
-        } catch (error: any) {
-            // Syntax errors are expected when converting incomplete code (mid-typing)
-            const isSyntaxError = error.message && (
-                error.message.includes('Invalid Python syntax') ||
-                error.message.includes('SyntaxError') ||
-                error.message.includes('unexpected indent') ||
-                error.message.includes('expected')
-            );
-            
-            if (isSyntaxError) {
-                // Log syntax errors at DEBUG level (expected during typing)
-                this.logger.debug('Python → VL conversion skipped (incomplete syntax)', { 
-                    error: error.message?.substring(0, 100) 
-                });
-            } else {
-                // Log other errors at ERROR level (unexpected)
-                this.logger.error('Python → VL conversion failed', error);
-            }
-            throw error;
-        }
-    }
-    
     /**
      * Run Python script with stdin/stdout
      * For large inputs, uses temporary file to avoid Windows command line length limits
@@ -469,23 +324,23 @@ export class VLConverter {
     }
     
     /**
-     * Test if Python and VL modules are available
+     * Test if Python and the VL toolkit modules are available
      */
     async test(): Promise<{ success: boolean; error?: string }> {
         try {
-            this.logger.debug('Testing VL converter');
-            
-            const testCode = 'def test(): return 42';
-            const vlCode = await this.pythonToVL(testCode);
-            
-            if (vlCode.includes('F:test')) {
-                this.logger.info('VL converter test passed');
+            this.logger.debug('Testing VL toolkit');
+
+            const testCode = '# comment\ndef test():\n    return 42\n';
+            const minified = await this.runPython(['-m', 'vl.py_minify', '-'], testCode);
+
+            if (minified.includes('def test') && !minified.includes('# comment')) {
+                this.logger.info('VL toolkit test passed');
                 return { success: true };
             } else {
-                return { success: false, error: 'Unexpected VL output' };
+                return { success: false, error: 'Unexpected minifier output' };
             }
         } catch (error: any) {
-            this.logger.error('VL converter test failed', error);
+            this.logger.error('VL toolkit test failed', error);
             return { success: false, error: error.message };
         }
     }

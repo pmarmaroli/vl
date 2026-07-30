@@ -1,8 +1,9 @@
 /**
- * VL AI Cost Optimizer - VS Code Extension
- * 
+ * VL (Very Little) AI Cost Optimizer - VS Code Extension
+ *
  * Main extension entry point. Activates transparent mode to automatically
- * optimize AI coding assistant requests, reducing token costs by 45%.
+ * optimize AI coding assistant requests (semantic minification and VL v2
+ * macro compression - measured 20-30% typical token savings).
  */
 
 import * as vscode from 'vscode';
@@ -62,14 +63,10 @@ export function activate(context: vscode.ExtensionContext) {
             await applyCodeFromChat(code, language, context);
         }),
         
-        vscode.commands.registerCommand('vl.convertToVL', async () => {
-            await convertCurrentFileToVL(converter);
+        vscode.commands.registerCommand('vl.minifyCurrentFile', async () => {
+            await minifyCurrentFile(converter);
         }),
-        
-        vscode.commands.registerCommand('vl.compileFromVL', async () => {
-            await compileCurrentVLFile(converter);
-        }),
-        
+
         vscode.commands.registerCommand('vl.showOutput', () => {
             logger.show();
         }),
@@ -152,86 +149,44 @@ async function toggleTransparentMode(
     }
 }
 
-async function convertCurrentFileToVL(converter: VLConverter) {
+async function minifyCurrentFile(converter: VLConverter) {
     const editor = vscode.window.activeTextEditor;
     if (!editor) {
         vscode.window.showErrorMessage('No active editor');
         return;
     }
-    
+
     const document = editor.document;
     const language = document.languageId;
-    
-    if (!['python', 'javascript', 'typescript'].includes(language)) {
-        vscode.window.showWarningMessage(`VL conversion not yet supported for ${language}`);
+
+    if (language !== 'python') {
+        vscode.window.showWarningMessage(`VL minification not yet supported for ${language}`);
         return;
     }
-    
+
     const code = document.getText();
-    
+
     try {
-        const vlCode = await converter.toVL(code, language as 'python' | 'javascript' | 'typescript');
-        
-        // Create new untitled document with VL code
-        const vlDoc = await vscode.workspace.openTextDocument({
-            language: 'vl',
-            content: vlCode
+        const result = await converter.optimize(code, 'python');
+
+        // Create new untitled document with the optimized code
+        const doc = await vscode.workspace.openTextDocument({
+            language: 'python',
+            content: result.content
         });
-        
-        await vscode.window.showTextDocument(vlDoc);
-        
-        const originalTokens = estimateTokenCount(code);
-        const vlTokens = estimateTokenCount(vlCode);
-        const savings = ((originalTokens - vlTokens) / originalTokens * 100).toFixed(1);
-        
+
+        await vscode.window.showTextDocument(doc);
+
+        const savings = result.originalTokens > 0
+            ? ((result.originalTokens - result.optimizedTokens) / result.originalTokens * 100).toFixed(1)
+            : '0.0';
+
         vscode.window.showInformationMessage(
-            `✅ Converted to VL: ${originalTokens} → ${vlTokens} tokens (${savings}% savings)`
+            `✅ Optimized (${result.format}): ${result.originalTokens} → ${result.optimizedTokens} tokens (${savings}% savings)`
         );
     } catch (error) {
-        vscode.window.showErrorMessage(`Conversion failed: ${error}`);
-        logger.error('Conversion error', error);
-    }
-}
-
-async function compileCurrentVLFile(converter: VLConverter) {
-    const editor = vscode.window.activeTextEditor;
-    if (!editor) {
-        vscode.window.showErrorMessage('No active editor');
-        return;
-    }
-    
-    const document = editor.document;
-    if (document.languageId !== 'vl') {
-        vscode.window.showWarningMessage('Current file is not a VL file');
-        return;
-    }
-    
-    // Ask user for target language
-    const target = await vscode.window.showQuickPick(
-        ['python', 'javascript', 'typescript'],
-        { placeHolder: 'Select target language' }
-    );
-    
-    if (!target) {
-        return;
-    }
-    
-    const vlCode = document.getText();
-    
-    try {
-        const targetCode = await converter.fromVL(vlCode, target as 'python' | 'javascript' | 'typescript');
-        
-        // Create new untitled document with target code
-        const targetDoc = await vscode.workspace.openTextDocument({
-            language: target,
-            content: targetCode
-        });
-        
-        await vscode.window.showTextDocument(targetDoc);
-        vscode.window.showInformationMessage(`✅ Compiled VL to ${target}`);
-    } catch (error) {
-        vscode.window.showErrorMessage(`Compilation failed: ${error}`);
-        logger.error('Compilation error', error);
+        vscode.window.showErrorMessage(`Optimization failed: ${error}`);
+        logger.error('Optimization error', error);
     }
 }
 
@@ -300,7 +255,7 @@ function showWelcomeMessage(context: vscode.ExtensionContext) {
         if (selection === 'Show Dashboard') {
             vscode.commands.executeCommand('vl.showDashboard');
         } else if (selection === 'Learn More') {
-            vscode.env.openExternal(vscode.Uri.parse('https://github.com/pmarmaroli/vibe-language'));
+            vscode.env.openExternal(vscode.Uri.parse('https://github.com/pmarmaroli/vl'));
         } else if (selection === 'Settings') {
             vscode.commands.executeCommand('workbench.action.openSettings', 'vl');
         }

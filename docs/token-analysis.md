@@ -4,6 +4,13 @@
 **Tokenizer:** Mistral Tekken (`mistral-common`, 130k-vocab BPE — same technology family as the Claude and GPT tokenizers, and available fully offline)
 **Tool:** `tests/benchmarks/real_token_benchmark.py`
 
+> **Historical note (July 2026):** this analysis is what led to removing the
+> VL v1 compact language from the repository entirely. The `py_to_vl`
+> converter and compiler it measures no longer exist in the tree (they remain
+> in git history); the project has been refocused on the two strategies that
+> won here — minification and v2 macros — and "VL" now stands for
+> *Very Little*.
+
 ## TL;DR
 
 The project's original premise — *fewer characters ⇒ fewer tokens* — does not

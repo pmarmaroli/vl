@@ -1,8 +1,9 @@
 /**
- * Claude API Client with Prompt Caching
- * 
- * Implements Anthropic's prompt caching to reduce VL specification overhead by 90%.
- * The VL language spec is cached across requests, dramatically reducing costs.
+ * Claude API Client
+ *
+ * Sends token-optimized context (minified Python, optionally with VL v2
+ * macros) to the Claude API. The small v2 macro spec is added to the
+ * system prompt only when macros are present in the context.
  */
 
 import Anthropic from '@anthropic-ai/sdk';
@@ -135,15 +136,14 @@ export class ClaudeClient {
      * Generate completion from optimized context.
      *
      * The system prompt depends on the context format:
-     * - 'vl': full VL v1 specification (cached — it is large)
      * - 'v2': the small VL v2 macro spec passed by the caller
      * - 'plain': minimal system prompt, no spec at all (the context is
-     *   plain Python; sending a language spec would waste tokens)
+     *   plain Python; sending a spec would waste tokens)
      */
     async generateCompletion(
         userPrompt: string,
         targetLanguage: 'python' | 'javascript' | 'typescript' = 'python',
-        context: { format: 'vl' | 'v2' | 'plain'; spec?: string } = { format: 'vl' }
+        context: { format: 'v2' | 'plain'; spec?: string } = { format: 'plain' }
     ): Promise<string | null> {
         const client = await this.getClient();
         if (!client) {
@@ -202,33 +202,9 @@ export class ClaudeClient {
     }
     
     /**
-     * Build the prompt for Claude (for VL conversion)
-     */
-    private buildPrompt(vlContext: string, targetLanguage: string): string {
-        const langName = targetLanguage.charAt(0).toUpperCase() + targetLanguage.slice(1);
-        
-        return `Convert this VL code to idiomatic ${langName}:
-
-\`\`\`vl
-${vlContext}
-\`\`\`
-
-Generate clean, readable ${langName} code. Only output the code, no explanations.`;
-    }
-    
-    /**
      * Build the system prompt for the given context format
      */
-    private buildSystemPrompt(context: { format: 'vl' | 'v2' | 'plain'; spec?: string }): any {
-        if (context.format === 'vl') {
-            return [
-                {
-                    type: "text",
-                    text: this.getVLSpecification(),
-                    cache_control: { type: "ephemeral" } as any  // TypeScript doesn't recognize cache_control yet
-                }
-            ];
-        }
+    private buildSystemPrompt(context: { format: 'v2' | 'plain'; spec?: string }): any {
         if (context.format === 'v2' && context.spec) {
             // Small spec (~150 tokens) — below Anthropic's caching minimum,
             // included directly
@@ -250,11 +226,9 @@ Generate clean, readable ${langName} code. Only output the code, no explanations
     /**
      * Build prompt for chat requests (user request + optimized context)
      */
-    private buildChatPrompt(userPrompt: string, targetLanguage: string, format: 'vl' | 'v2' | 'plain' = 'vl'): string {
+    private buildChatPrompt(userPrompt: string, targetLanguage: string, format: 'v2' | 'plain' = 'plain'): string {
         const langName = targetLanguage.charAt(0).toUpperCase() + targetLanguage.slice(1);
-        const contextNote = format === 'vl'
-            ? '- The code context is in VL format to save tokens'
-            : '- The code context is Python, compacted to save tokens (logic unchanged)';
+        const contextNote = '- The code context is Python, compacted to save tokens (logic unchanged)';
 
         return `User Request: ${userPrompt}
 
@@ -264,246 +238,6 @@ ${contextNote}
 - If generating code, use ${langName}
 - Be concise but thorough
 - Format code blocks with proper markdown`;
-    }
-    
-    /**
-     * Get VL language specification (cached across requests)
-     * NOTE: This must be >1024 tokens to enable Anthropic prompt caching
-     */
-    private getVLSpecification(): string {
-        return `VL (Vibe Language) v0.2.0-alpha - Token-Efficient Language Specification
-
-VL is a compact intermediate language designed for AI code generation with ~47% fewer tokens than Python/JavaScript/TypeScript.
-Proven to achieve 40-75% token reduction in real-world code generation scenarios.
-
-═══════════════════════════════════════════════════════════════════════════════
-CORE SYNTAX
-═══════════════════════════════════════════════════════════════════════════════
-
-FUNCTIONS:
-  F:name|param_types|return_type|body
-  - name: Function identifier
-  - param_types: Comma-separated type codes (I,F,S,B,A,O)
-  - return_type: Single type code or V (void)
-  - body: Function statements separated by |
-
-VARIABLES:
-  name=value
-  - Implicit type inference
-  - No declaration keyword needed
-  - Scope determined by context
-
-CONDITIONALS:
-  if:condition?true_value:false_value
-  - Ternary-style syntax
-  - Can be nested: if:a>b?if:c>d?e:f:g
-  - Used in expressions and statements
-
-LOOPS:
-  for:var,iterable|body
-  - var: Loop variable name
-  - iterable: Array, range, or iterable expression
-  - body: Loop body statements
-
-while:condition|body
-  - condition: Boolean expression
-  - body: Loop body statements
-
-OPERATIONS:
-  op:+(a,b)      # Addition
-  op:-(a,b)      # Subtraction
-  op:*(a,b)      # Multiplication
-  op:/(a,b)      # Division
-  op:%(a,b)      # Modulo
-  op:==(a,b)     # Equality
-  op:>(a,b)      # Greater than
-  op:<(a,b)      # Less than
-  op:>=(a,b)     # Greater or equal
-  op:<=(a,b)     # Less or equal
-  op:&&(a,b)     # Logical AND
-  op:||(a,b)     # Logical OR
-  op:!(a)        # Logical NOT
-
-COLLECTIONS:
-  Arrays: [item1,item2,item3]
-  Objects: {key1:val1,key2:val2}
-  Access: arr[index], obj.key or obj[key]
-
-FUNCTION CALLS:
-  @functionName(args)  # Explicit call operator
-  functionName(args)   # Implicit call (context-dependent)
-
-PYTHON PASSTHROUGH:
-    py:<code>            # Statement/expression passthrough
-    - Encoded form may use @@@ for newlines, @4@ for 4-space indents (expanded only when single-line encoded)
-    - py:__RAW__('...') preserves full module verbatim
-    - py:__RAW_B64__('<base64>') for marker/binary-safe payloads (no newline/indent expansion)
-
-═══════════════════════════════════════════════════════════════════════════════
-TYPE SYSTEM
-═══════════════════════════════════════════════════════════════════════════════
-
-PRIMITIVE TYPES:
-  I = integer (int, int64, long)
-  F = float (float, double, decimal)
-  S = string (str, String, string)
-  B = boolean (bool, Boolean, boolean)
-  V = void (no return value)
-
-COMPOSITE TYPES:
-  A = array/list (list, array, List<T>)
-  O = object/dict (dict, object, Map<K,V>)
-  T = tuple (tuple, array with fixed size)
-  
-OPTIONAL TYPES:
-  I? = optional integer
-  A? = optional array
-  
-GENERIC COLLECTIONS:
-  A<I> = array of integers
-  A<S> = array of strings
-  O<S,I> = object with string keys, integer values
-
-═══════════════════════════════════════════════════════════════════════════════
-PARAMETER ACCESS
-═══════════════════════════════════════════════════════════════════════════════
-
-INDEXED PARAMETERS:
-  i0, i1, i2... = function parameters (0-indexed)
-  - Always use indexes for function parameters
-  - Enables position-based parameter passing
-  - More compact than named parameters
-
-VARIABLE REFERENCES:
-  \$var = reference to variable in expression
-  - Use when variable name might conflict
-  - Explicit variable dereferencing
-
-═══════════════════════════════════════════════════════════════════════════════
-COMPREHENSIVE EXAMPLES
-═══════════════════════════════════════════════════════════════════════════════
-
-EXAMPLE 1 - Basic Function:
-VL:     F:add|I,I|I|ret:i0+i1
-Python: def add(i0: int, i1: int) -> int:
-            return i0 + i1
-JS:     function add(i0, i1) { return i0 + i1; }
-
-EXAMPLE 2 - Conditional Logic:
-VL:     F:max|I,I|I|ret:if:i0>i1?i0:i1
-Python: def max(i0: int, i1: int) -> int:
-            return i0 if i0 > i1 else i1
-JS:     function max(i0, i1) { return i0 > i1 ? i0 : i1; }
-
-EXAMPLE 3 - Loop with Filter:
-VL:     F:filterPositive|A|A|result=[]|for:item,i0|if:item>0?result.append(item)|ret:result
-Python: def filterPositive(i0: list) -> list:
-            result = []
-            for item in i0:
-                if item > 0:
-                    result.append(item)
-            return result
-
-EXAMPLE 4 - Nested Loops:
-VL:     F:matrix_sum|A<A<I>>|I|total=0|for:row,i0|for:val,row|total=total+val|ret:total
-Python: def matrix_sum(i0: list[list[int]]) -> int:
-            total = 0
-            for row in i0:
-                for val in row:
-                    total = total + val
-            return total
-
-EXAMPLE 5 - Object Processing:
-VL:     F:getUserName|O|S|ret:i0.name
-Python: def getUserName(i0: dict) -> str:
-            return i0['name']
-JS:     function getUserName(i0) { return i0.name; }
-
-EXAMPLE 6 - Array Mapping:
-VL:     F:doubleValues|A<I>|A<I>|result=[]|for:x,i0|result.append(x*2)|ret:result
-Python: def doubleValues(i0: list[int]) -> list[int]:
-            result = []
-            for x in i0:
-                result.append(x * 2)
-            return result
-
-EXAMPLE 7 - Multiple Conditions:
-VL:     F:classify|I|S|ret:if:i0<0?'negative':if:i0==0?'zero':'positive'
-Python: def classify(i0: int) -> str:
-            return 'negative' if i0 < 0 else ('zero' if i0 == 0 else 'positive')
-
-EXAMPLE 8 - Error Handling:
-VL:     F:safeDivide|F,F|F|ret:if:i1==0?0:i0/i1
-Python: def safeDivide(i0: float, i1: float) -> float:
-            return 0 if i1 == 0 else i0 / i1
-
-EXAMPLE 9 - String Operations:
-VL:     F:greet|S|S|ret:'Hello, '+i0+'!'
-Python: def greet(i0: str) -> str:
-            return f'Hello, {i0}!'
-JS:     function greet(i0) { return \`Hello, \${i0}!\`; }
-
-EXAMPLE 10 - Complex Data Structure:
-VL:     users=[{name:'Alice',age:30},{name:'Bob',age:25}]
-Python: users = [{'name': 'Alice', 'age': 30}, {'name': 'Bob', 'age': 25}]
-JS:     const users = [{name: 'Alice', age: 30}, {name: 'Bob', age: 25}];
-
-EXAMPLE 11 - Data Validation:
-VL:     F:isValidEmail|S|B|ret:op:&&(i0.includes('@'),i0.includes('.'))
-Python: def isValidEmail(i0: str) -> bool:
-            return '@' in i0 and '.' in i0
-
-EXAMPLE 12 - Aggregation:
-VL:     F:sum|A<I>|I|total=0|for:n,i0|total=total+n|ret:total
-Python: def sum(i0: list[int]) -> int:
-            total = 0
-            for n in i0:
-                total = total + n
-            return total
-
-═══════════════════════════════════════════════════════════════════════════════
-CONVERSION RULES
-═══════════════════════════════════════════════════════════════════════════════
-
-PYTHON CONVERSION:
-1. Use type hints (PEP 484) for all parameters and returns
-2. Follow PEP 8 naming conventions (snake_case)
-3. Use f-strings for string formatting
-4. Prefer list comprehensions where appropriate
-5. Use 'in' operator instead of 'includes'
-6. Dictionary access: obj['key'] not obj.key
-7. Proper indentation (4 spaces)
-
-JAVASCRIPT CONVERSION:
-1. Use const/let appropriately (prefer const)
-2. Use camelCase naming
-3. Template literals for strings (\`\${var}\`)
-4. Array methods: includes(), map(), filter()
-5. Object property access: obj.key or obj['key']
-6. Arrow functions for callbacks: x => x * 2
-
-TYPESCRIPT CONVERSION:
-1. All JavaScript rules apply
-2. Add type annotations: : number, : string, : boolean
-3. Interface definitions for complex objects
-4. Generic types where applicable: Array<number>
-5. Proper return types for functions
-
-GENERAL PRINCIPLES:
-- Generate clean, readable, idiomatic code
-- Preserve exact logic and semantics
-- Use target language's standard library
-- Proper error handling where appropriate
-- Performance-conscious implementations
-- Follow language-specific best practices
-
-═══════════════════════════════════════════════════════════════════════════════
-YOUR TASK
-═══════════════════════════════════════════════════════════════════════════════
-
-Convert VL code snippets to clean, idiomatic code in the target language.
-Output ONLY the code, no explanations or markdown formatting.
-Ensure the output is ready to run without modifications.`;
     }
     
     /**
@@ -578,24 +312,4 @@ Ensure the output is ready to run without modifications.`;
         };
     }
     
-    /**
-     * Warm the cache by making a dummy request
-     * Call this on extension startup to ensure VL spec is cached
-     */
-    async warmCache(): Promise<boolean> {
-        this.logger.info('Warming Claude prompt cache...');
-        
-        const result = await this.generateCompletion(
-            'F:test|I|I|ret:i0',
-            'python'
-        );
-        
-        if (result) {
-            this.logger.info('✅ Cache warmed successfully');
-            return true;
-        } else {
-            this.logger.warn('⚠️ Cache warming failed');
-            return false;
-        }
-    }
 }

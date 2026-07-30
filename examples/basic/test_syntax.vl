@@ -1,3 +1,0 @@
-F:sum|I,I|I|ret:i0+i1
-res=sum(10,20)
-@print(res)

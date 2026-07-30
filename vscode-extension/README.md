@@ -1,14 +1,14 @@
-# VL AI Cost Optimizer
+# VL (Very Little) — AI Cost Optimizer
 
 **Cut your AI coding costs — automatically.** (measured 20–30% token savings via semantic minification, up to ~57% with VL v2 macros)
 
-VL is a VS Code extension that optimizes AI coding assistant requests, reducing token usage and costs without requiring you to learn a new language.
+VL (Very Little) is a VS Code extension that optimizes AI coding assistant requests — semantic minification and v2 macro compression reduce token usage and costs. Everything stays plain Python: there is no new language to learn.
 
 ## Features
 
 ### 🔮 Transparent Mode (Active Now!)
 - **Automatic AI chat optimization** - Just use `@vl` in VS Code chat
-- Optimizes Python code to VL format before sending to Claude/AI
+- Minifies / macro-compresses Python context before sending to Claude/AI
 - **Zero learning curve** - Keep writing Python normally
 - **Real-time cost savings tracking** - Dashboard with daily/weekly/monthly stats
 - **Measured 20–30% token reduction** on typical Python (semantic minification, verified with a real LLM tokenizer)
@@ -16,8 +16,7 @@ VL is a VS Code extension that optimizes AI coding assistant requests, reducing 
 - **Apply code buttons** - One-click application of AI responses
 
 ### 🎯 Manual Optimization (Also Available)
-- Convert Python files to token-efficient VL format
-- Compile VL back to Python/JavaScript/TypeScript
+- `VL: Optimize Current File (Minify / v2)` — see what the model would receive
 - See token savings in real-time
 - Command palette integration
 
@@ -47,15 +46,15 @@ When you use `@vl` in chat, the extension:
 - `@vl` - Chat participant for optimized AI requests (use in VS Code chat)
 - `VL: Show Cost Savings Dashboard` - View detailed analytics with projections
 - `VL: Export Analytics to CSV` - Export full savings history
-- `VL: Convert Current File to VL` - Manual Python → VL conversion
-- `VL: Compile VL to Target Language` - Manual VL → Python/JS/TS compilation
+- `VL: Optimize Current File (Minify / v2)` - Preview the token-optimized version of the current file
+- `VL: Set Anthropic API Key` - Store your API key in VS Code secure storage
 - `VL: Toggle Transparent Mode` - Enable/disable auto-optimization
 - `VL: Reset Statistics` - Clear token savings data
 
 ## Prompt Syntax (Update Guide)
 
-- System prompt + cached VL spec live in `src/transparent-mode/claudeClient.ts` (`getVLSpecification`, `buildChatPrompt`, `buildPrompt`).
-- Keep prompts concise and align with current VL syntax (raw/base64 passthrough, full-module preservation). Avoid reiterating the spec already cached.
+- System prompts live in `src/transparent-mode/claudeClient.ts` (`buildSystemPrompt`, `buildChatPrompt`). The small VL v2 macro spec is inlined only when macros are present in the context.
+- Keep prompts concise.
 - After any prompt edits, rebuild and repackage:
    ```bash
    npm install         # once

@@ -15,7 +15,8 @@ cd vl
 pip install -e ".[dev]"
 
 # Verify installation
-vl examples/basic/hello.vl
+vl-minify --help
+vl2 --spec
 
 # Run tests
 pytest
@@ -41,21 +42,19 @@ git push origin feature/your-feature
 
 ## What We Need
 
-**Note:** We're currently focusing contributions on the **core VL compiler**. The VS Code extension is in private alpha and will be open-sourced before public release.
-
 ### High Priority
 
 | Area | Examples |
 |------|----------|
-| **Converters** | JavaScript ↔ VL, TypeScript ↔ VL bidirectional conversion |
-| **Compiler** | JS/TS code generator improvements, optimization passes |
-| **Language Features** | New VL syntax patterns, domain-specific constructs |
+| **New v2 macros** | Frequent multi-line patterns worth a macro (each must beat its expansion on a real tokenizer — see docs/vl2-design.md) |
+| **Detector coverage** | More syntactic variants of the known patterns, always conservative |
+| **Minifier** | JavaScript/TypeScript minification support |
 | **Documentation** | Tutorials, examples, video guides |
 | **Testing** | Edge cases, real-world code examples, benchmarks |
 
 ### Good First Issues
 
-- Add new VL code examples
+- Propose and benchmark a new v2 macro
 - Improve error messages
 - Write documentation
 - Add test cases
@@ -89,25 +88,9 @@ pytest
 - Add docstrings to public functions
 - Keep functions focused and small
 
-**Example:**
-```python
-def compile_to_python(ast: ASTNode) -> str:
-    """Compile VL AST to Python source code.
-    
-    Args:
-        ast: The VL abstract syntax tree
-        
-    Returns:
-        Generated Python source code
-    """
-    # Implementation
-    pass
-```
-
 **File Organization:**
-- `src/vl/` - Core compiler code
+- `src/vl/` - Toolkit code (minifier + v2 macros)
 - `tests/` - All test files
-- `examples/` - VL code examples
 - `docs/` - Documentation
 
 ### Commit Messages
@@ -175,20 +158,15 @@ Include:
 
 ```
 vl/
-├── src/vl/              # Core compiler
-│   ├── lexer.py         # Tokenizer
-│   ├── parser.py        # AST generator
-│   ├── compiler.py      # Main compiler
-│   ├── py2vl.py         # Python → VL converter
-│   └── codegen/         # Code generators (5 targets)
-├── tests/               # Test suite
-│   ├── unit/            # Unit tests
-│   ├── integration/     # Integration tests
-│   ├── codegen/         # Code generation tests
-│   └── benchmarks/      # Performance benchmarks
-├── examples/            # VL code examples
-├── docs/                # Documentation
-└── vl.bat / vl          # CLI wrappers
+├── src/vl/              # VL (Very Little) toolkit
+│   ├── py_minify.py     # Semantic Python minifier (vl-minify)
+│   └── v2/              # v2 macros: registry, expander, detector (vl2)
+├── tests/
+│   ├── unit/            # Unit tests (minifier, macros, detector)
+│   ├── benchmarks/      # Real-tokenizer benchmarks
+│   └── experiments/     # LLM-in-the-loop experiments
+├── docs/                # Design docs and token analysis
+└── vscode-extension/    # VS Code extension (@vl chat participant)
 ```
 
 ---

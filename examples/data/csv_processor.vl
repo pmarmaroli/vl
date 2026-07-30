@@ -1,6 +1,0 @@
-# Data Analysis Example
-M:analyzeData,data_processor,python
-
-F:filterAdults|A|A|data:i0|filter:age>18
-
-E:filterAdults

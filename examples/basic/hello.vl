@@ -1,6 +1,0 @@
-# Hello World in VL
-M:hello,function,python
-
-F:greet|S|S|ret:'Hello, ${i0}!'
-
-E:greet

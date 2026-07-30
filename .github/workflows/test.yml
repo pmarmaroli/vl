@@ -33,23 +33,9 @@ jobs:
     - name: Run test suite
       run: pytest -q
 
-    - name: Set up Node.js for JavaScript smoke test
-      uses: actions/setup-node@v4
-      with:
-        node-version: '20'
-
-    - name: CLI smoke test (Python target)
-      run: |
-        vl examples/basic/loops.vl --target python --output test_output_py.py
-        python test_output_py.py
-
-    - name: CLI smoke test (JavaScript target)
-      run: |
-        vl examples/basic/loops.vl --target javascript --output test_output_js.js
-        node test_output_js.js
-
     - name: Minifier and v2 smoke tests
       run: |
         vl-minify src/vl/py_minify.py > /dev/null
         vl2 --spec > /dev/null
+        echo "data = jload('c.json')" | vl2 -
       shell: bash

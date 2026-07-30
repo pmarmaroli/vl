@@ -2,8 +2,8 @@
 
 Compares, for each input Python file (or the built-in samples):
   1. the original Python source
-  2. the VL conversion (vl.py_to_vl)
-  3. the minified Python (vl.py_minify) — semantics preserved
+  2. the minified Python (vl.py_minify) — semantics preserved
+  3. macro-compressed + minified (vl.v2 detector + minifier)
 
 Tokenizer resolution order:
   - Mistral Tekken (bundled offline in the `mistral-common` package, 130k-vocab
@@ -21,7 +21,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 from vl.py_minify import minify  # noqa: E402
-from vl.py_to_vl import convert_python_to_vl  # noqa: E402
+from vl.v2 import compress_macros  # noqa: E402
 
 
 def get_tokenizer():
@@ -90,40 +90,33 @@ def main(argv):
     else:
         sources = SAMPLES
 
-    header = f"{'file':<28} {'python':>7} {'vl':>7} {'vl_sav':>8} {'minified':>9} {'min_sav':>8}"
+    header = f"{'file':<28} {'python':>7} {'minified':>9} {'min_sav':>8} {'v2+min':>7} {'v2_sav':>8}"
     print(header)
     print("-" * len(header))
-    tot_py = tot_vl = tot_min = 0
+    tot_py = tot_min = tot_v2 = 0
     for fname, src in sources.items():
-        try:
-            vl_code = convert_python_to_vl(src)
-            t_vl = count(vl_code)
-        except Exception:
-            t_vl = None
         minified = minify(src)
-        t_py, t_min = count(src), count(minified)
+        try:
+            compressed, _stats = compress_macros(src)
+            v2_min = minify(compressed)
+        except SyntaxError:
+            v2_min = minified
+        t_py, t_min, t_v2 = count(src), count(minified), count(v2_min)
         tot_py += t_py
         tot_min += t_min
-        if t_vl is not None:
-            tot_vl += t_vl
-            vl_cols = f"{t_vl:>7} {100 * (t_py - t_vl) / t_py:>7.1f}%"
-        else:
-            vl_cols = f"{'FAIL':>7} {'-':>8}"
+        tot_v2 += t_v2
         print(
-            f"{Path(fname).name:<28} {t_py:>7} {vl_cols} "
-            f"{t_min:>9} {100 * (t_py - t_min) / t_py:>7.1f}%"
+            f"{Path(fname).name:<28} {t_py:>7} {t_min:>9} {100 * (t_py - t_min) / t_py:>7.1f}% "
+            f"{t_v2:>7} {100 * (t_py - t_v2) / t_py:>7.1f}%"
         )
     print("-" * len(header))
-    vl_total = (
-        f"{tot_vl:>7} {100 * (tot_py - tot_vl) / tot_py:>7.1f}%" if tot_vl else f"{'-':>7} {'-':>8}"
-    )
     print(
-        f"{'TOTAL':<28} {tot_py:>7} {vl_total} "
-        f"{tot_min:>9} {100 * (tot_py - tot_min) / tot_py:>7.1f}%"
+        f"{'TOTAL':<28} {tot_py:>7} {tot_min:>9} {100 * (tot_py - tot_min) / tot_py:>7.1f}% "
+        f"{tot_v2:>7} {100 * (tot_py - tot_v2) / tot_py:>7.1f}%"
     )
     print(
         "\nPositive % = tokens saved vs original Python. "
-        "Negative % = costs MORE tokens than plain Python."
+        "v2+min = macro compression (vl.v2) followed by minification."
     )
 
 

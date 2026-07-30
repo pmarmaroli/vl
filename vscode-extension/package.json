@@ -1,8 +1,8 @@
 {
   "name": "vl-cost-optimizer",
-  "displayName": "VL AI Cost Optimizer",
-  "description": "Cut your AI coding costs - Automatic token optimization (measured 20-30% savings, up to ~57% with VL v2 macros) for GitHub Copilot and AI assistants",
-  "version": "0.2.1-alpha",
+  "displayName": "VL (Very Little) - AI Cost Optimizer",
+  "description": "Send very little to the model - automatic token optimization (measured 20-30% savings, up to ~57% with VL v2 macros) for AI coding assistants",
+  "version": "0.3.0-alpha",
   "publisher": "vibe",
   "icon": "icon.png",
   "repository": {
@@ -13,7 +13,6 @@
     "vscode": "^1.108.0"
   },
   "categories": [
-    "Programming Languages",
     "Machine Learning",
     "Other"
   ],
@@ -32,26 +31,6 @@
   ],
   "main": "./out/extension.js",
   "contributes": {
-    "languages": [
-      {
-        "id": "vl",
-        "aliases": [
-          "VL",
-          "vibe"
-        ],
-        "extensions": [
-          ".vl"
-        ],
-        "configuration": "./language-configuration.json"
-      }
-    ],
-    "grammars": [
-      {
-        "language": "vl",
-        "scopeName": "source.vl",
-        "path": "./syntaxes/vl.tmLanguage.json"
-      }
-    ],
     "configuration": {
       "title": "VL Cost Optimizer",
       "properties": {
@@ -65,14 +44,12 @@
           "enum": [
             "minify",
             "v2",
-            "vl",
             "auto"
           ],
           "enumDescriptions": [
             "Semantic Python minification (default): strips comments/docstrings/blank lines, output stays plain Python. Measured ~20-30% real token savings, zero correctness risk.",
             "VL v2 (highest savings): macro compression + minification. Known multi-line patterns become one-line macro calls (~57% measured on pattern-rich code); the small macro spec is added to the prompt only when macros were detected.",
-            "Legacy VL conversion: compact VL syntax. Often costs MORE tokens than plain Python on real tokenizers (see docs/token-analysis.md).",
-            "Try all strategies and keep whichever is estimated cheapest."
+            "Try both strategies and keep whichever is estimated cheapest."
           ],
           "default": "minify",
           "description": "How to optimize code before sending it to the AI"
@@ -101,11 +78,6 @@
           "default": false,
           "description": "Enable debug logging to output channel"
         },
-        "vl.debug.showVLCode": {
-          "type": "boolean",
-          "default": false,
-          "description": "Show converted VL code in output channel"
-        },
         "vl.compiler.pythonPath": {
           "type": "string",
           "default": "python",
@@ -126,11 +98,6 @@
           "type": "boolean",
           "default": false,
           "description": "Enable VL-optimized completions via Claude API (requires API key)"
-        },
-        "vl.claude.warmCacheOnStartup": {
-          "type": "boolean",
-          "default": true,
-          "description": "Pre-cache VL specification on startup for faster completions"
         }
       }
     },
@@ -164,16 +131,6 @@
         "category": "VL"
       },
       {
-        "command": "vl.convertToVL",
-        "title": "VL: Convert Current File to VL",
-        "category": "VL"
-      },
-      {
-        "command": "vl.compileFromVL",
-        "title": "VL: Compile VL to Target Language",
-        "category": "VL"
-      },
-      {
         "command": "vl.showOutput",
         "title": "VL: Show Output Channel",
         "category": "VL"
@@ -181,6 +138,11 @@
       {
         "command": "vl.showStats",
         "title": "VL: Show Statistics",
+        "category": "VL"
+      },
+      {
+        "command": "vl.minifyCurrentFile",
+        "title": "VL: Optimize Current File (Minify / v2)",
         "category": "VL"
       }
     ]

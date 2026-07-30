@@ -1,6 +1,0 @@
-# React Counter Component
-M:Counter,ui_component,react
-
-ui:Counter|state:count:I=0|on:handleClick|render:div
-
-E:Counter

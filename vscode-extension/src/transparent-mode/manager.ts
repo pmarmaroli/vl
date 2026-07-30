@@ -56,19 +56,8 @@ export class TransparentModeManager {
         this.isActive = true;
         this.logger.info('Transparent mode: Active - Monitoring chat/agent requests');
         
-        // Warm cache on startup if enabled
-        const warmCache = config.get<boolean>('claude.warmCacheOnStartup', true);
         const claudeEnabled = config.get<boolean>('claude.enableCompletions', false);
-        
-        if (claudeEnabled && warmCache) {
-            // Warm cache in background (don't await)
-            this.claudeClient.warmCache().then(success => {
-                if (success) {
-                    this.logger.info('✅ Claude cache pre-warmed for fast completions');
-                }
-            });
-        }
-        
+
         // Show appropriate message based on configuration
         const debugEnabled = config.get<boolean>('debug.enabled', false);
         

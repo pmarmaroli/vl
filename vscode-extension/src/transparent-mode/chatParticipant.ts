@@ -19,9 +19,9 @@ interface ChatContext {
     language: string;
     /**
      * 'python-min' = minified plain Python, 'v2' = minified Python with VL v2
-     * macros, 'vl' = VL syntax, 'original' = unchanged
+     * macros, 'original' = unchanged
      */
-    format: 'python-min' | 'v2' | 'vl' | 'original';
+    format: 'python-min' | 'v2' | 'original';
     /** VL v2 macro spec (set only for format 'v2') */
     spec?: string;
 }
@@ -101,7 +101,7 @@ export class VLChatParticipant {
             
             for (const fileCtx of fileContexts) {
                 try {
-                    // Optimize per the configured mode (minify | vl | auto).
+                    // Optimize per the configured mode (minify | v2 | auto).
                     // Never returns something more expensive than the original.
                     const result = await this.converter.optimize(
                         fileCtx.content,
@@ -186,12 +186,10 @@ export class VLChatParticipant {
                 
                 const minified = vlContexts.filter(c => c.format === 'python-min').length;
                 const asV2 = vlContexts.filter(c => c.format === 'v2').length;
-                const asVL = vlContexts.filter(c => c.format === 'vl').length;
                 const untouched = vlContexts.filter(c => c.format === 'original').length;
                 const parts: string[] = [];
                 if (minified > 0) { parts.push(`${minified} minified`); }
                 if (asV2 > 0) { parts.push(`${asV2} macro-compressed (v2)`); }
-                if (asVL > 0) { parts.push(`${asVL} converted to VL`); }
                 if (untouched > 0) { parts.push(`${untouched} kept as-is`); }
                 stream.markdown(`- ${vlContexts.length} file(s) optimized (${parts.join(', ')})\n`);
                 stream.markdown(`- **${totalSaved} tokens saved** (${savingsPercent}% reduction)\n`);
@@ -225,8 +223,7 @@ export class VLChatParticipant {
                 
                 if (debugEnabled && vlContexts.length > 0) {
                     const preview = vlContexts[0].vlContent.substring(0, 300);
-                    const fence = vlContexts[0].format === 'vl' ? 'vl' : vlContexts[0].language;
-                    stream.markdown('```' + fence + '\n' + preview + '...\n```\n\n');
+                    stream.markdown('```' + vlContexts[0].language + '\n' + preview + '...\n```\n\n');
                 }
                 
                 stream.markdown('**What would happen in Premium mode:**\n');
@@ -253,22 +250,13 @@ export class VLChatParticipant {
                     // Build the full prompt with user request + optimized context.
                     // Plain Python (minified or original) needs no VL framing.
                     const targetLanguage = vlContexts[0]?.language || 'python';
-                    const contextBlocks = vlContexts.map(c => {
-                        if (c.format === 'vl') {
-                            return `Context (in VL format for efficiency):\n\`\`\`vl\n${c.vlContent}\n\`\`\``;
-                        }
-                        return `Context:\n\`\`\`${c.language}\n${c.vlContent}\n\`\`\``;
-                    });
-                    // Pick the API context format: VL needs its full spec,
-                    // v2 needs the small macro spec, plain needs none.
-                    const hasVL = vlContexts.some(c => c.format === 'vl');
+                    const contextBlocks = vlContexts.map(c =>
+                        `Context:\n\`\`\`${c.language}\n${c.vlContent}\n\`\`\``
+                    );
+                    // Pick the API context format: v2 needs the small macro
+                    // spec, plain (minified) needs none.
                     const v2Spec = vlContexts.find(c => c.format === 'v2')?.spec;
-                    const apiFormat: 'vl' | 'v2' | 'plain' = hasVL ? 'vl' : (v2Spec ? 'v2' : 'plain');
-                    if (hasVL && v2Spec) {
-                        // Mixed formats (auto mode): VL spec goes in the system
-                        // prompt, so inline the small v2 spec here.
-                        contextBlocks.unshift(`Some context uses VL v2 macros:\n${v2Spec}`);
-                    }
+                    const apiFormat: 'v2' | 'plain' = v2Spec ? 'v2' : 'plain';
                     const fullPrompt = `${request.prompt}\n\n${contextBlocks.join('\n\n')}`;
                     
                     // Calculate what we would have sent without VL
@@ -544,9 +532,8 @@ export class VLChatParticipant {
 
         for (let i = 0; i < vlContexts.length; i++) {
             const ctx = vlContexts[i];
-            const fence = ctx.format === 'vl' ? 'vl' : ctx.language;
             prompt += `File ${i + 1} (${ctx.language}):\n`;
-            prompt += `\`\`\`${fence}\n${ctx.vlContent}\n\`\`\`\n\n`;
+            prompt += `\`\`\`${ctx.language}\n${ctx.vlContent}\n\`\`\`\n\n`;
         }
 
         prompt += `Please analyze the code above and respond to the user's request.\n`;

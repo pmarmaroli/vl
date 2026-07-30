@@ -38,7 +38,6 @@ export class VLCompletionProvider implements vscode.InlineCompletionItemProvider
         // Get configuration
         const config = vscode.workspace.getConfiguration('vl');
         const debugEnabled = config.get<boolean>('debug.enabled', false);
-        const showVLCode = config.get<boolean>('debug.showVLCode', false);
         
         try {
             // Get surrounding code context (what would be sent to Copilot)
@@ -61,7 +60,7 @@ export class VLCompletionProvider implements vscode.InlineCompletionItemProvider
             // Estimate original token count using calibrated model
             const originalTokens = estimateTokens(context, document.languageId);
             
-            // Optimize (minify | vl | auto per settings) to see potential savings
+            // Optimize (minify | v2 | auto per settings) to see potential savings
             try {
                 const optimized = await this.converter.optimize(
                     context,
@@ -86,19 +85,12 @@ export class VLCompletionProvider implements vscode.InlineCompletionItemProvider
                         savingsPercent: savingsPercent + '%'
                     });
                     
-                    if (showVLCode) {
-                        this.logger.debug('VL conversion', {
-                            original: context.substring(0, 200) + '...',
-                            vl: vlCode.substring(0, 200) + '...'
-                        });
-                    }
                 }
                 
                 // If Claude completions are enabled, generate VL-based completion
                 const claudeEnabled = config.get<boolean>('claude.enableCompletions', false);
                 if (claudeEnabled && this.claudeClient && vlCode.trim()) {
-                    const apiFormat = optimized.format === 'vl' ? 'vl'
-                        : optimized.format === 'v2' ? 'v2' : 'plain';
+                    const apiFormat: 'v2' | 'plain' = optimized.format === 'v2' ? 'v2' : 'plain';
                     const completion = await this.claudeClient.generateCompletion(
                         vlCode,
                         document.languageId as 'python' | 'javascript' | 'typescript',

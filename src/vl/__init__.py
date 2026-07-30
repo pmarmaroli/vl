@@ -1,16 +1,21 @@
 """
-VL (Vibe Language) - Universal Programming Language for the AI Era
+VL (Very Little) - Token-efficiency toolkit for AI coding
 
-A token-efficient, multi-target programming language designed for
-optimal collaboration between humans and AI language models.
+Two measured strategies to send very little to the model:
+
+- ``vl.py_minify``: semantic Python minification (comments, docstrings and
+  blank lines removed, AST-verified identical semantics). ~20-30% real
+  token savings.
+- ``vl.v2``: single-line, valid-Python macros that stand for multi-line
+  patterns; a conservative detector compresses existing code into macro
+  form and ``expand_macros`` turns it back into dependency-free Python.
+  56-93% measured savings per macro use.
 """
 
-__version__ = "0.2.0a0"
+__version__ = "0.3.0a0"
 __author__ = "VL Contributors"
 
-from .compiler import Compiler, TargetLanguage
-from .lexer import Lexer
-from .parser import Parser
-from .type_checker import TypeChecker
+from .py_minify import minify
+from .v2 import MACRO_SPEC, MACROS, compress_macros, expand_macros
 
-__all__ = ['Compiler', 'TargetLanguage', 'Lexer', 'Parser', 'TypeChecker']
+__all__ = ["minify", "MACRO_SPEC", "MACROS", "compress_macros", "expand_macros"]
