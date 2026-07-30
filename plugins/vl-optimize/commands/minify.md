@@ -10,7 +10,7 @@ For each file, run `vl-minify <file>` via Bash and treat its output as your
 reading copy of that file (comments, docstrings and blank lines are removed;
 the logic is AST-verified identical). Do not `Read` the raw files as well —
 that would defeat the purpose. If `vl-minify` is not installed, say so and
-suggest `pip install git+https://github.com/pmarmaroli/vl.git`, then fall back
+suggest `pip install very-little`, then fall back
 to a normal `Read`.
 
 Remember: the files on disk remain the source of truth. If you later edit one

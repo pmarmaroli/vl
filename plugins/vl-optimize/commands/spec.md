@@ -25,6 +25,6 @@ files = walk_files(root, pattern)       # recursive glob -> sorted str paths
 ```
 
 Only use a macro when it fits the need exactly; write normal Python otherwise.
-If `vl2` is not installed, suggest `pip install git+https://github.com/pmarmaroli/vl.git`.
+If `vl2` is not installed, suggest `pip install very-little`.
 
 Confirm to the user that VL v2 macro generation is now active, in one sentence.

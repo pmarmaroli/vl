@@ -30,6 +30,9 @@ Everything is plain Python in and plain Python out — there is no new language 
 ### CLI
 
 ```bash
+pip install very-little
+
+# or, from source:
 git clone https://github.com/pmarmaroli/vl.git
 cd vl
 pip install -e .
@@ -84,7 +87,7 @@ fewer tokens burned against your usage limits, longer effective context. No
 API key involved.
 
 ```
-pip install git+https://github.com/pmarmaroli/vl.git   # provides vl-minify and vl2
+pip install very-little   # provides vl-minify and vl2
 
 # then, inside Claude Code:
 /plugin marketplace add pmarmaroli/vl

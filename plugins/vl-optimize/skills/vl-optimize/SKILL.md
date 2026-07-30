@@ -14,7 +14,7 @@ code. Everything is plain Python in and plain Python out.
 Run `vl-minify --help` once. If the command is missing:
 
 ```bash
-pip install git+https://github.com/pmarmaroli/vl.git
+pip install very-little
 ```
 
 If installation is impossible, continue without optimization — never block the
