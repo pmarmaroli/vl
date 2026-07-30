@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="logo.png" alt="VL — Very Little" width="220"/>
+</p>
+
 # VL — Very Little
 
 **Send very little to the model. Cut your AI coding costs — automatically.**
