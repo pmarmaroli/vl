@@ -1,0 +1,15 @@
+{
+  "name": "vl",
+  "description": "VL (Very Little) - token-efficiency tools for AI coding: minified Python context reads and v2 macro generation.",
+  "owner": {
+    "name": "Patrick Marmaroli",
+    "url": "https://github.com/pmarmaroli"
+  },
+  "plugins": [
+    {
+      "name": "vl-optimize",
+      "source": "./plugins/vl-optimize",
+      "description": "Send very little to the model: read Python context minified (20-30% fewer tokens) and generate pattern-heavy Python via VL v2 macros (56-93% fewer output tokens). No API key needed - works with Claude Code Pro/Max subscriptions."
+    }
+  ]
+}

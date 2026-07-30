@@ -76,6 +76,34 @@ compressed, stats = compress_macros(source)  # known patterns -> macro calls
 runnable = expand_macros(llm_output)       # macro calls -> standard Python
 ```
 
+### Claude Code Plugin (no API key needed)
+
+For Claude Code users on **Pro/Max subscriptions**: the plugin makes Claude
+read Python context minified and generate pattern-heavy code via v2 macros —
+fewer tokens burned against your usage limits, longer effective context. No
+API key involved.
+
+```
+pip install git+https://github.com/pmarmaroli/vl.git   # provides vl-minify and vl2
+
+# then, inside Claude Code:
+/plugin marketplace add pmarmaroli/vl
+/plugin install vl-optimize@vl
+```
+
+What you get:
+
+- **`vl-optimize` skill** — Claude automatically reads large Python files via
+  `vl-minify` (20–30% fewer context tokens) and writes covered patterns as v2
+  macros before expanding them to standard Python (56–93% fewer output tokens).
+- **`/vl-optimize:minify <file...>`** — load specific files into context in
+  minified form.
+- **`/vl-optimize:spec`** — switch the session to macro-based generation.
+
+Guardrails are built into the skill: files on disk stay the source of truth,
+minified text is never written back, and delivered code is always the
+expanded, dependency-free Python.
+
 ### VS Code Extension (Alpha)
 
 1. Download the latest [.vsix from Releases](https://github.com/pmarmaroli/vl/releases)

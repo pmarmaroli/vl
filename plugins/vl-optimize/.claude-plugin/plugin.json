@@ -1,0 +1,13 @@
+{
+  "name": "vl-optimize",
+  "displayName": "VL (Very Little) Optimizer",
+  "version": "0.3.0",
+  "description": "Token-efficient Python handling for Claude Code: minified context reads and VL v2 macro generation. Requires the very-little pip package (vl-minify, vl2).",
+  "author": {
+    "name": "Patrick Marmaroli"
+  },
+  "homepage": "https://github.com/pmarmaroli/vl",
+  "repository": "https://github.com/pmarmaroli/vl",
+  "license": "MIT",
+  "keywords": ["tokens", "minifier", "cost", "python", "context"]
+}
